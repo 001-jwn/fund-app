@@ -45,6 +45,7 @@ class CardOut(BaseModel):
     why_line: str
     interest: str
     logo_url: str | None = None
+    because_liked: str | None = None
 
 
 class CardsOut(BaseModel):
