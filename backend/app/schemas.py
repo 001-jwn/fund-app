@@ -35,9 +35,13 @@ class CardOut(BaseModel):
     latest_news_headline: str | None = None
     latest_news_summary: str | None = None
     latest_news_date: str | None = None
+    news_date_label: str | None = None
     news_available: bool
+    news_status: str
+    news_message: str | None = None
     quarterly_summary: str | None = None
     last_quarter_date: str | None = None
+    quarter_label: str | None = None
     why_line: str
     interest: str
     logo_url: str | None = None

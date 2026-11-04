@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from app.interests import ALLOWED_INTERESTS
 from app.models import Company, CompanyInterest, UserInterest
+from app.services.news import (
+    NO_RECENT_NEWS_MESSAGE,
+    NO_RECENT_NEWS_SENTINEL,
+    format_news_date_label,
+    format_quarter_label,
+)
 
 
 def choose_interest_link(
@@ -30,8 +36,28 @@ def user_interest_set(rows: list[UserInterest]) -> set[str]:
 
 def public_card(company: Company, link: CompanyInterest) -> dict:
     price_ok = company.current_price is not None
-    headline = (company.latest_news_headline or "").strip()
-    news_ok = bool(headline)
+    raw_headline = (company.latest_news_headline or "").strip()
+    if raw_headline == NO_RECENT_NEWS_SENTINEL:
+        news_status = "none"
+        news_message = NO_RECENT_NEWS_MESSAGE
+        headline = None
+        summary = None
+        news_date = None
+        news_ok = False
+    elif raw_headline:
+        news_status = "ready"
+        news_message = None
+        headline = company.latest_news_headline
+        summary = (company.latest_news_summary or "").strip() or None
+        news_date = company.latest_news_date
+        news_ok = True
+    else:
+        news_status = "unavailable"
+        news_message = None
+        headline = None
+        summary = None
+        news_date = None
+        news_ok = False
     return {
         "ticker": company.ticker,
         "company_name": company.company_name,
@@ -39,12 +65,16 @@ def public_card(company: Company, link: CompanyInterest) -> dict:
         "current_price": company.current_price if price_ok else None,
         "price_change_percent": company.price_change_percent if price_ok else None,
         "price_available": price_ok,
-        "latest_news_headline": company.latest_news_headline if news_ok else None,
-        "latest_news_summary": company.latest_news_summary if news_ok else None,
-        "latest_news_date": company.latest_news_date if news_ok else None,
+        "latest_news_headline": headline,
+        "latest_news_summary": summary,
+        "latest_news_date": news_date if news_ok else None,
+        "news_date_label": format_news_date_label(news_date) if news_ok else None,
         "news_available": news_ok,
+        "news_status": news_status,
+        "news_message": news_message,
         "quarterly_summary": company.quarterly_summary,
         "last_quarter_date": company.last_quarter_date,
+        "quarter_label": format_quarter_label(company.last_quarter_date),
         "why_line": link.why_line,
         "interest": link.interest,
         "logo_url": company.logo_url or None,

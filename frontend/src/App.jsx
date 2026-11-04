@@ -31,6 +31,9 @@ function priceLine(card) {
 }
 
 function newsBlock(card) {
+  if (card.news_status === "none") {
+    return <p className="row">{card.news_message || "No recent news about this company yet."}</p>;
+  }
   if (!card.news_available || !card.latest_news_headline) {
     return <p className="row"><b>Latest news:</b> unavailable</p>;
   }
@@ -38,7 +41,7 @@ function newsBlock(card) {
     <div className="row">
       <p><b>Latest news:</b> {card.latest_news_headline}</p>
       {card.latest_news_summary ? <p>{card.latest_news_summary}</p> : null}
-      {card.latest_news_date ? <p>Date: {card.latest_news_date}</p> : null}
+      {card.news_date_label ? <p>{card.news_date_label}</p> : null}
     </div>
   );
 }
@@ -64,6 +67,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [finnhub, setFinnhub] = useState("off");
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,7 +137,8 @@ export default function App() {
 
   useEffect(() => {
     if (screen !== "swipe" || !userId || finnhub !== "on" || !current) return undefined;
-    if (current.price_available && current.news_available) return undefined;
+    const newsSettled = current.news_available || current.news_status === "none";
+    if (current.price_available && newsSettled && current.logo_url) return undefined;
     const ticker = current.ticker;
     const timer = setInterval(() => {
       getCards(userId, 10)
@@ -153,6 +158,7 @@ export default function App() {
     setQueue([]);
     setMatches([]);
     setPicked([]);
+    setConfirmReset(false);
     setScreen("onboarding");
     setError(message || "");
   }
@@ -216,7 +222,15 @@ export default function App() {
         <nav>
           <button type="button" onClick={() => setScreen("swipe")}>Swipe</button>
           <button type="button" onClick={() => setScreen("matches")}>Matches</button>
-          <button type="button" onClick={() => forgetUser("")}>Start over</button>
+          {confirmReset ? (
+            <div>
+              <p>Start over? This clears your interests and likes.</p>
+              <button type="button" onClick={() => forgetUser("")}>Start over</button>
+              <button type="button" onClick={() => setConfirmReset(false)}>Cancel</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirmReset(true)}>Start over</button>
+          )}
         </nav>
       ) : null}
 
@@ -265,12 +279,8 @@ export default function App() {
               <p className="row">{priceLine(current)}</p>
               <p className="row">{current.short_description}</p>
               {newsBlock(current)}
-              <p className="row">
-                <b>Latest quarter:</b> {current.quarterly_summary || "unavailable"}
-              </p>
-              <p className="row">
-                <b>Quarter ended:</b> {current.last_quarter_date || "unavailable"}
-              </p>
+              <p className="row">{current.quarterly_summary || "Latest quarter: unavailable"}</p>
+              <p className="row">{current.quarter_label || "Last quarter: unavailable"}</p>
               <button type="button" onClick={() => swipe("like")} disabled={busy}>
                 Like
               </button>
@@ -287,7 +297,7 @@ export default function App() {
           <h2>Matches</h2>
           {loading ? <p>Loading matches...</p> : null}
           {!loading && matches.length === 0 ? (
-            <p>No matches yet. Like a company on the Swipe screen and it will show up here.</p>
+            <p>No matches yet. Tap Like on a company you'd like to follow and it'll show up here.</p>
           ) : null}
           {matches.map((match) => (
             <article className="card" key={match.ticker}>

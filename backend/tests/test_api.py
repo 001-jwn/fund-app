@@ -234,23 +234,26 @@ def test_refresh_stores_live_fields_and_keeps_seed_quarter_date(client, monkeypa
     monkeypatch.setattr(live_mod, "DEFAULT_CACHE_DIR", tmp_path)
     live_mod._client = None
 
-    def fake_fields(_self, symbol, _news_from, _news_to, include_earnings=False):
-        assert include_earnings is False
-        return {
-            "ticker": symbol,
-            "current_price": 210.5,
-            "price_change_percent": 1.25,
-            "logo_url": "https://example.com/nvda.png",
-            "latest_news_headline": "NVIDIA ships a new chip",
-            "latest_news_summary": "A short summary of the news.",
-            "latest_news_date": "2026-11-02",
-            "last_quarter_date": "1999-01-01",
-            "holder_count": 999,
-            "error": None,
-        }
+    def fake_quote(_self, symbol):
+        assert symbol == "NVDA"
+        return {"c": 210.5, "dp": 1.25}
 
-    monkeypatch.setattr(live_mod.FinnhubClient, "card_live_fields", fake_fields)
-    live_mod.refresh_ticker("NVDA")
+    def fake_news(_self, symbol, _news_from, _news_to):
+        return [
+            {
+                "headline": "NVIDIA ships a new chip",
+                "summary": "A short summary of the news.",
+                "datetime": 1793577600,  # 2026-11-02 00:00:00 UTC
+            }
+        ]
+
+    def fake_profile(_self, symbol):
+        return {"logo": "https://example.com/nvda.png", "name": "Should Not Replace Seed"}
+
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", fake_quote)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", fake_news)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", fake_profile)
+    live_mod.refresh_passes(["NVDA"])
 
     user_id = _onboard(client, ["gaming"])
     nvidia = next(card for card in _cards(client, user_id) if card["ticker"] == "NVDA")
@@ -261,6 +264,8 @@ def test_refresh_stores_live_fields_and_keeps_seed_quarter_date(client, monkeypa
     assert nvidia["latest_news_headline"] == "NVIDIA ships a new chip"
     assert nvidia["latest_news_summary"] == "A short summary of the news."
     assert nvidia["latest_news_date"] == "2026-11-02"
+    assert nvidia["news_date_label"] == "News from Nov 2"
+    assert nvidia["quarter_label"] == "Last quarter (ended Jul 26, 2026)"
     assert nvidia["logo_url"] == "https://example.com/nvda.png"
     assert nvidia["last_quarter_date"] == "2026-07-26"
     assert "holder_count" not in nvidia
@@ -298,14 +303,18 @@ def test_refresh_failure_does_not_invent_numbers(client, monkeypatch, tmp_path):
     def explode(*_args, **_kwargs):
         raise RuntimeError("finnhub down")
 
-    monkeypatch.setattr(live_mod.FinnhubClient, "card_live_fields", explode)
-    live_mod.refresh_ticker("TSLA")
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", explode)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", explode)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", explode)
+    live_mod.refresh_passes(["TSLA"])
 
     user_id = _onboard(client, ["automobile"])
     tesla = next(card for card in _cards(client, user_id) if card["ticker"] == "TSLA")
     assert tesla["price_available"] is False
     assert tesla["current_price"] is None
     assert tesla["news_available"] is False
+    assert tesla["news_status"] == "unavailable"
+    assert tesla["news_message"] is None
 
 
 def test_loader_ignores_interest_tags(client, tmp_path):
@@ -378,6 +387,76 @@ def test_seed_file_location_and_contents(client):
     assert session.query(Company).filter(Company.holder_count.isnot(None)).count() == 0
     assert session.query(Company).filter(Company.current_price.isnot(None)).count() == 0
     session.close()
+
+
+def test_like_and_dislike_reject_ticker_outside_interests(client):
+    user_id = _onboard(client, ["gaming"])
+    liked = client.post("/like", json={"user_id": user_id, "ticker": "BKNG"})
+    assert liked.status_code == 400
+    assert "interest" in liked.json()["detail"].lower()
+    disliked = client.post("/dislike", json={"user_id": user_id, "ticker": "HLT"})
+    assert disliked.status_code == 400
+    assert "interest" in disliked.json()["detail"].lower()
+    matches = client.get("/matches", params={"user_id": user_id})
+    assert matches.json()["matches"] == []
+    cards = {card["ticker"] for card in _cards(client, user_id)}
+    assert "BKNG" not in cards and "NVDA" in cards
+    ok = client.post("/like", json={"user_id": user_id, "ticker": "NVDA"})
+    assert ok.status_code == 200
+    assert ok.json()["matched"] is True
+
+
+def test_no_matching_news_uses_the_empty_message(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("FINNHUB_API_KEY", "dummy-key")
+    monkeypatch.setenv("FUN_D_FINNHUB_LIVE", "1")
+
+    from app.services import live as live_mod
+    from app.services.news import NO_RECENT_NEWS_MESSAGE
+
+    monkeypatch.setattr(live_mod, "DEFAULT_CACHE_DIR", tmp_path)
+    live_mod._client = None
+    calls = []
+
+    def fake_quote(_self, symbol):
+        calls.append(("quote", symbol))
+        return {"c": 20.0, "dp": 0.5}
+
+    def fake_news(_self, symbol, _news_from, _news_to):
+        calls.append(("news", symbol))
+        return [{
+            "headline": "Stocks swing on election night",
+            "summary": "U.S. markets moved as results came in.",
+            "datetime": 10,
+        }]
+
+    def fake_profile(_self, symbol):
+        calls.append(("profile", symbol))
+        return {"logo": "https://example.com/logo.png"}
+
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", fake_quote)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", fake_news)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", fake_profile)
+    live_mod.refresh_passes(["AMD", "NVDA"])
+
+    assert calls == [
+        ("quote", "AMD"),
+        ("quote", "NVDA"),
+        ("news", "AMD"),
+        ("news", "NVDA"),
+        ("profile", "AMD"),
+        ("profile", "NVDA"),
+    ]
+    user_id = _onboard(client, ["gaming"])
+    cards = {card["ticker"]: card for card in _cards(client, user_id)}
+    for ticker in ("AMD", "NVDA"):
+        card = cards[ticker]
+        assert card["news_status"] == "none"
+        assert card["news_message"] == NO_RECENT_NEWS_MESSAGE
+        assert card["news_available"] is False
+        assert card["latest_news_headline"] is None
+        assert card["latest_news_summary"] is None
+        assert card["price_available"] is True
+        assert card["current_price"] == 20.0
 
 
 def test_matches_empty(client):

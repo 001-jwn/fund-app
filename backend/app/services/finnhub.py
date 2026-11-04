@@ -104,6 +104,7 @@ class FinnhubClient:
         news_from: str,
         news_to: str,
         include_earnings: bool = False,
+        company_name: str | None = None,
     ) -> dict[str, Any]:
         """
         Assemble live fields for one ticker.
@@ -121,6 +122,7 @@ class FinnhubClient:
             "latest_news_headline": None,
             "latest_news_summary": None,
             "latest_news_date": None,
+            "news_checked": False,
             "last_quarter_date": None,
             "holder_count": None,  # never filled from Finnhub free tier
             "error": None,
@@ -155,10 +157,15 @@ class FinnhubClient:
             TTL_NEWS,
         )
         if isinstance(news, list):
-            headline, summary, news_date = _newest_news(news)
-            out["latest_news_headline"] = headline
-            out["latest_news_summary"] = summary
-            out["latest_news_date"] = news_date
+            # Import here so the client module stays usable without the app package cycle.
+            from app.services.news import select_company_news
+
+            out["news_checked"] = True
+            picked = select_company_news(news, symbol)
+            if picked is not None:
+                out["latest_news_headline"] = picked.headline
+                out["latest_news_summary"] = picked.summary
+                out["latest_news_date"] = picked.news_date
         elif news is not None:
             errors.append(str(news))
 
@@ -295,17 +302,3 @@ def _price_from_quote(quote: dict[str, Any]) -> tuple[float | None, float | None
     return float(raw), pct
 
 
-def _newest_news(articles: list[Any]) -> tuple[str | None, str | None, str | None]:
-    usable = [item for item in articles if isinstance(item, dict)]
-    if not usable:
-        return None, None, None
-    usable.sort(key=lambda item: item.get("datetime") or 0, reverse=True)
-    newest = usable[0]
-    headline = newest.get("headline")
-    if not isinstance(headline, str) or not headline.strip():
-        return None, None, None
-    summary = newest.get("summary")
-    summary_text = summary.strip() if isinstance(summary, str) and summary.strip() else None
-    dt = newest.get("datetime")
-    news_date = time.strftime("%Y-%m-%d", time.gmtime(dt)) if isinstance(dt, (int, float)) and not isinstance(dt, bool) else None
-    return headline.strip(), summary_text, news_date

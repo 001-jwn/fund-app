@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db, utcnow
-from app.models import Company, Dislike, Like, Match, User
+from app.models import Company, CompanyInterest, Dislike, Like, Match, User, UserInterest
 from app.schemas import SwipeIn, SwipeOut
 
 router = APIRouter()
@@ -22,7 +22,22 @@ def _user_and_company(db: Session, user_id: str, ticker: str) -> tuple[User, Com
         raise HTTPException(status_code=404, detail="Company not found.")
     if company.status != "active":
         raise HTTPException(status_code=400, detail="That company is not active.")
+    _require_user_interest(db, user_id, ticker)
     return user, company, ticker
+
+
+def _require_user_interest(db: Session, user_id: str, ticker: str) -> None:
+    user_interests = {
+        row.interest for row in db.query(UserInterest).filter(UserInterest.user_id == user_id).all()
+    }
+    company_interests = {
+        row.interest for row in db.query(CompanyInterest).filter(CompanyInterest.ticker == ticker).all()
+    }
+    if not user_interests.intersection(company_interests):
+        raise HTTPException(
+            status_code=400,
+            detail="That company is outside the interests you picked.",
+        )
 
 
 @router.post("/like", response_model=SwipeOut)

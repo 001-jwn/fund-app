@@ -2,6 +2,11 @@
 
 Live data is stored on the company row. It is never written back into
 backend/app/seed/seed_companies.json. holder_count is never set.
+
+A pass fetches every quote first, then every news list, then every profile,
+so prices show up before logos. The Finnhub client caches each response on
+disk under backend/cache/finnhub, so a restart does not repeat a fresh call
+until that cache entry expires. Calls stay about 1.1 seconds apart.
 """
 
 from __future__ import annotations
@@ -14,7 +19,8 @@ from datetime import date, timedelta
 from app import db as dbmod
 from app.db import utcnow
 from app.models import Company
-from app.services.finnhub import DEFAULT_CACHE_DIR, FinnhubClient
+from app.services.finnhub import DEFAULT_CACHE_DIR, FinnhubClient, _price_from_quote
+from app.services.news import NO_RECENT_NEWS_SENTINEL, select_company_news
 
 logger = logging.getLogger("fund.live")
 
@@ -22,6 +28,9 @@ _client: FinnhubClient | None = None
 _stop = threading.Event()
 _thread: threading.Thread | None = None
 _refresh_lock = threading.Lock()
+
+# Quotes for every ticker, then news, then logos. Not three calls per ticker.
+PHASES = ("quote", "news", "profile")
 
 
 def should_fetch_live() -> bool:
@@ -52,48 +61,96 @@ def get_client() -> FinnhubClient:
     return _client
 
 
-def refresh_ticker(ticker: str) -> None:
-    """Fetch live fields for one ticker and store non-null values. Never raises."""
+def refresh_passes(tickers: list[str] | None = None, respect_stop: bool = False) -> None:
+    """One full fill: all quotes, then all news, then all profiles."""
     if not should_fetch_live():
         return
+    if tickers is None:
+        tickers = _active_tickers()
+    for phase in PHASES:
+        for ticker in tickers:
+            if not should_fetch_live():
+                return
+            if respect_stop and _stop.is_set():
+                return
+            _refresh_phase(ticker, phase)
+
+
+def refresh_ticker(ticker: str) -> None:
+    """Refresh one ticker. Prefer refresh_passes so quotes are not stuck behind news."""
+    refresh_passes([ticker.strip().upper()])
+
+
+def _refresh_phase(ticker: str, phase: str) -> None:
     ticker = ticker.strip().upper()
-    if dbmod.SessionLocal is None:
+    try:
+        with _refresh_lock:
+            client = get_client()
+            if phase == "quote":
+                quote = client.get_quote(ticker)
+                price, pct = _price_from_quote(quote if isinstance(quote, dict) else {})
+                _store_quote(ticker, price, pct)
+            elif phase == "news":
+                today = date.today()
+                news_from = (today - timedelta(days=30)).isoformat()
+                articles = client.get_company_news(ticker, news_from, today.isoformat())
+                if not isinstance(articles, list):
+                    return
+                picked = select_company_news(articles, ticker)
+                _store_news(ticker, picked)
+            elif phase == "profile":
+                profile = client.get_profile(ticker)
+                logo = profile.get("logo") if isinstance(profile, dict) else None
+                if isinstance(logo, str) and logo.strip():
+                    _store_logo(ticker, logo.strip())
+    except Exception:
+        logger.exception("Finnhub %s refresh failed for %s", phase, ticker)
+
+
+def _store_quote(ticker: str, price: float | None, pct: float | None) -> None:
+    if price is None:
         return
 
-    needs_quarter = False
+    def apply(company: Company) -> bool:
+        company.current_price = float(price)
+        company.price_change_percent = float(pct) if isinstance(pct, (int, float)) and not isinstance(pct, bool) else None
+        return True
+
+    _update_company(ticker, apply)
+
+
+def _store_news(ticker: str, picked) -> None:
+    def apply(company: Company) -> bool:
+        if picked is None:
+            company.latest_news_headline = NO_RECENT_NEWS_SENTINEL
+            company.latest_news_summary = None
+            company.latest_news_date = None
+            return True
+        company.latest_news_headline = picked.headline
+        company.latest_news_summary = picked.summary
+        company.latest_news_date = picked.news_date
+        return True
+
+    _update_company(ticker, apply)
+
+
+def _store_logo(ticker: str, logo: str) -> None:
+    def apply(company: Company) -> bool:
+        company.logo_url = logo
+        return True
+
+    _update_company(ticker, apply)
+
+
+def _update_company(ticker: str, apply) -> None:
+    if dbmod.SessionLocal is None:
+        return
     session = dbmod.SessionLocal()
     try:
         company = session.get(Company, ticker)
         if company is None or company.status != "active":
             return
-        needs_quarter = not (company.last_quarter_date or "").strip()
-    except Exception:
-        logger.exception("Could not read %s before Finnhub refresh", ticker)
-        return
-    finally:
-        session.close()
-
-    today = date.today()
-    news_from = (today - timedelta(days=30)).isoformat()
-    try:
-        with _refresh_lock:
-            fields = get_client().card_live_fields(
-                ticker,
-                news_from,
-                today.isoformat(),
-                include_earnings=needs_quarter,
-            )
-    except Exception:
-        logger.exception("Finnhub refresh failed for %s", ticker)
-        return
-
-    session = dbmod.SessionLocal()
-    try:
-        company = session.get(Company, ticker)
-        if company is None:
-            return
-        changed = _apply_live_fields(company, fields)
-        if changed:
+        if apply(company):
             company.data_updated_at = utcnow()
             session.commit()
     except Exception:
@@ -101,42 +158,6 @@ def refresh_ticker(ticker: str) -> None:
         session.rollback()
     finally:
         session.close()
-
-
-def _apply_live_fields(company: Company, fields: dict) -> bool:
-    """Copy only real values. Never invent, never touch holder_count."""
-    changed = False
-    price = fields.get("current_price")
-    if isinstance(price, (int, float)) and not isinstance(price, bool) and price > 0:
-        company.current_price = float(price)
-        pct = fields.get("price_change_percent")
-        company.price_change_percent = (
-            float(pct) if isinstance(pct, (int, float)) and not isinstance(pct, bool) else None
-        )
-        changed = True
-
-    logo = fields.get("logo_url")
-    if isinstance(logo, str) and logo.strip():
-        company.logo_url = logo.strip()
-        changed = True
-
-    headline = fields.get("latest_news_headline")
-    if isinstance(headline, str) and headline.strip():
-        company.latest_news_headline = headline.strip()
-        summary = fields.get("latest_news_summary")
-        company.latest_news_summary = summary.strip() if isinstance(summary, str) and summary.strip() else None
-        news_date = fields.get("latest_news_date")
-        company.latest_news_date = news_date if isinstance(news_date, str) and news_date.strip() else None
-        changed = True
-
-    # Seed date wins. Finnhub earnings period is only a fallback.
-    if not (company.last_quarter_date or "").strip():
-        period = fields.get("last_quarter_date")
-        if isinstance(period, str) and period.strip():
-            company.last_quarter_date = period.strip()
-            changed = True
-
-    return changed
 
 
 def _active_tickers() -> list[str]:
@@ -157,12 +178,12 @@ def _loop() -> None:
     while not _stop.is_set():
         if not should_fetch_live():
             return
-        for ticker in _active_tickers():
-            if _stop.is_set() or not should_fetch_live():
-                return
-            refresh_ticker(ticker)
-        # Quotes expire after ~5 minutes. Sleep, then let the cache decide
-        # what actually needs a network call.
+        try:
+            refresh_passes(respect_stop=True)
+        except Exception:
+            logger.exception("Finnhub refresh loop failed")
+        # Quotes expire after ~5 minutes. A warm disk cache makes the next
+        # pass skip network calls that are still fresh.
         _stop.wait(60)
 
 
