@@ -334,11 +334,15 @@ printf 'EXPO_PUBLIC_API_URL=http://%s:8000\n' "$IP" > mobile/.env
 cat mobile/.env
 ```
 
+If you don't see four numbers with dots (like 192.168.1.23), try `ipconfig getifaddr en1`, or use the address from the "Running for the iPhone app" section.
+
 You should see one line, with your Wi-Fi number in place of the example:
 
 ```
 EXPO_PUBLIC_API_URL=http://192.168.1.42:8000
 ```
+
+Check `mobile/.env`. It must show a real address, four numbers with dots, then `:8000`. If the line says `EXPO_PUBLIC_API_URL=http://:8000`, the address was missing. Fix it before you go on.
 
 `mobile/.env.example` has the placeholder `http://192.168.x.x:8000`. That example is the only name this file uses.
 
@@ -402,7 +406,9 @@ The Mac's Wi-Fi IP can change. From the `fund-app` folder:
 ipconfig getifaddr en0
 ```
 
-You should see four numbers with dots. If that is already the number in `mobile/.env`, the address is not the problem.
+If you don't see four numbers with dots (like 192.168.1.23), try `ipconfig getifaddr en1`, or use the address from the "Running for the iPhone app" section.
+
+You should see four numbers with dots. Check `mobile/.env`. It should already show a real address. If the number you just saw is that address, the address is not the problem.
 
 ### 10. Write the new address, then restart Expo
 
@@ -414,7 +420,9 @@ printf 'EXPO_PUBLIC_API_URL=http://%s:8000\n' "$IP" > mobile/.env
 cat mobile/.env
 ```
 
-You should see one line, `EXPO_PUBLIC_API_URL=http://` plus the new number and `:8000`. Then do steps 7 and 8.
+If you don't see four numbers with dots (like 192.168.1.23), try `ipconfig getifaddr en1`, or use the address from the "Running for the iPhone app" section.
+
+Check `mobile/.env`. You should see one line, `EXPO_PUBLIC_API_URL=http://` plus a real number and `:8000`. If it says `http://:8000`, stop and get a real address before you restart Expo. Then do steps 7 and 8.
 
 ## Stop the app
 
