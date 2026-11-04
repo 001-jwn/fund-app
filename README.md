@@ -306,6 +306,8 @@ http://127.0.0.1:5173/
 
 Click **Dislike** on a card you want to skip. That company does not go into Matches, and it does not come back.
 
+`POST /unlike` removes a like and its match, so that stock can come back in the feed. It does not count as a dislike.
+
 Click **Start over** if you want to pick different interests. That starts a new session in this browser.
 
 ## iPhone app
@@ -527,4 +529,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `33 passed`.
+The last line should include `34 passed`.

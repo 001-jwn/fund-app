@@ -198,6 +198,54 @@ def test_like_creates_match_and_dislike_removes_it(client):
     assert music_tickers == MUSIC - {"AAPL", "SPOT"}
 
 
+def test_unlike_removes_the_match_and_brings_the_card_back(client):
+    user_id = _onboard(client, ["music"])
+    other_id = _onboard(client, ["music"])
+    assert client.post("/like", json={"user_id": user_id, "ticker": "SPOT"}).status_code == 200
+    assert client.post("/like", json={"user_id": other_id, "ticker": "SPOT"}).status_code == 200
+
+    removed = client.post("/unlike", json={"user_id": user_id, "ticker": "spot"})
+    assert removed.status_code == 200
+    assert removed.json() == {
+        "ok": True,
+        "user_id": user_id,
+        "ticker": "SPOT",
+        "matched": False,
+    }
+
+    listed = client.get("/matches", params={"user_id": user_id})
+    assert listed.json()["matches"] == []
+    assert "SPOT" in {card["ticker"] for card in _cards(client, user_id)}
+
+    other_matches = client.get("/matches", params={"user_id": other_id})
+    assert [item["ticker"] for item in other_matches.json()["matches"]] == ["SPOT"]
+
+    again = client.post("/unlike", json={"user_id": user_id, "ticker": "SPOT"})
+    assert again.status_code == 200
+    assert again.json()["ok"] is True
+    assert again.json()["matched"] is False
+    assert "SPOT" in {card["ticker"] for card in _cards(client, user_id)}
+
+    missing_user = client.post("/unlike", json={"user_id": "nobody", "ticker": "SPOT"})
+    assert missing_user.status_code == 404
+
+    missing_company = client.post("/unlike", json={"user_id": user_id, "ticker": "NOPE"})
+    assert missing_company.status_code == 404
+
+    # Outside the user's interests, and not currently liked. Still ok, and not a dislike.
+    outside = client.post("/unlike", json={"user_id": user_id, "ticker": "BKNG"})
+    assert outside.status_code == 200
+    assert outside.json()["matched"] is False
+    assert "BKNG" not in {card["ticker"] for card in _cards(client, user_id)}
+
+    from app.db import SessionLocal
+    from app.models import Dislike
+
+    session = SessionLocal()
+    assert session.query(Dislike).filter(Dislike.user_id == user_id).count() == 0
+    session.close()
+
+
 def test_unknown_user_and_ticker(client):
     missing = client.get("/cards", params={"user_id": "nobody"})
     assert missing.status_code == 404
