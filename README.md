@@ -2,6 +2,8 @@
 
 fun(d) is a simple website that shows public companies matching interests you pick: Gaming, Travel, Music, or Automobile. You look at one company at a time, press Like or Dislike, and the companies you like show up under Matches.
 
+The iPhone steps are in [iPhone app](#iphone-app). That app uses the backend from [Running for the iPhone app](#running-for-the-iphone-app).
+
 You do not need to know how to code. Do the steps in order. Each terminal step is one command. Copy the whole line, paste it into the VS Code terminal, and press Enter.
 
 There are two versions of some commands: one for Mac, one for Windows. Run only the line that matches your computer.
@@ -294,6 +296,125 @@ http://127.0.0.1:5173/
 Click **Dislike** on a card you want to skip. That company does not go into Matches, and it does not come back.
 
 Click **Start over** if you want to pick different interests. That starts a new session in this browser.
+
+## iPhone app
+
+Skip this section if you are only using the website. These steps open the same three screens in Expo Go. Do steps 1 through 8 above first, so Node is installed and this folder is open.
+
+Start the backend, get the Mac Wi-Fi address, and open `http://<Mac-IP>:8000/health` with the steps in **Running for the iPhone app**. Do that before step 5 below. When that backend starts, macOS shows a popup asking to allow incoming connections. Click **Allow**.
+
+The iPhone and the Mac have to be on the same Wi-Fi.
+
+### 1. Install Expo Go on the iPhone
+
+This step is not a terminal command.
+
+1. Open the App Store.
+2. Search for **Expo Go**.
+3. Install the app from **650 Industries, Inc.**
+4. Open Expo Go once.
+
+### 2. Install the phone app tools
+
+In a terminal in the `fund-app` folder:
+
+```
+npm install --prefix mobile
+```
+
+Wait until the prompt comes back. You may see a note about funding or vulnerabilities. You can ignore that.
+
+### 3. Set the API URL
+
+`mobile/.env` is one line, the server address from **Running for the iPhone app**. From the `fund-app` folder:
+
+```
+IP=$(ipconfig getifaddr en0)
+printf 'EXPO_PUBLIC_API_URL=http://%s:8000\n' "$IP" > mobile/.env
+cat mobile/.env
+```
+
+You should see one line, with your Wi-Fi number in place of the example:
+
+```
+EXPO_PUBLIC_API_URL=http://192.168.1.42:8000
+```
+
+`mobile/.env.example` has the placeholder `http://192.168.x.x:8000`. That example is the only name this file uses.
+
+### 4. Sign in to Expo
+
+Expo Go on an iPhone opens this project when the phone and the Mac use the same free Expo account.
+
+On the iPhone, open Expo Go, tap the account icon, and sign in. Create a free account at https://expo.dev/signup if you need one.
+
+On the Mac, open a new terminal. Do not type in the backend terminal.
+
+```
+cd mobile
+npx expo login
+```
+
+Sign in with that same account. When the prompt comes back, run:
+
+```
+npx expo whoami
+```
+
+You should see your Expo username. You are now inside the `mobile` folder. Stay here for the next step.
+
+### 5. Start Expo
+
+```
+npx expo start --lan
+```
+
+You should see a QR code and a line that contains `exp://`. You do not get a prompt back. Leave this terminal open.
+
+### 6. Scan the QR code with the iPhone camera
+
+1. Open the iPhone Camera app and point it at the QR code.
+2. Tap the banner to open Expo Go.
+3. Expo Go asks for Local Network permission. Tap **Allow**.
+4. You should see the heading **fun(d)** and four choices: Gaming, Travel, Music, Automobile.
+
+Swipe a card right for Like, or left for Dislike. The Like and Dislike buttons do the same thing.
+
+### 7. After you edit mobile/.env, stop Expo
+
+Click the Expo terminal and press Ctrl+C. Wait until the prompt comes back. Expo reads `EXPO_PUBLIC_API_URL` when it builds the app, so a running Expo still has the old address.
+
+### 8. Start Expo again and clear the cache
+
+From the `mobile` folder:
+
+```
+npx expo start -c
+```
+
+You should see a QR code. Scan it again with the iPhone camera. `-c` clears the cache so the phone uses the new address.
+
+### 9. If the phone stops connecting, check the Wi-Fi address
+
+The Mac's Wi-Fi IP can change. From the `fund-app` folder:
+
+```
+ipconfig getifaddr en0
+```
+
+You should see four numbers with dots. If that is already the number in `mobile/.env`, the address is not the problem.
+
+### 10. Write the new address, then restart Expo
+
+From the `fund-app` folder, if the number from step 9 is different:
+
+```
+IP=$(ipconfig getifaddr en0)
+printf 'EXPO_PUBLIC_API_URL=http://%s:8000\n' "$IP" > mobile/.env
+cat mobile/.env
+```
+
+You should see one line, `EXPO_PUBLIC_API_URL=http://` plus the new number and `:8000`. Then do steps 7 and 8.
 
 ## Stop the app
 
