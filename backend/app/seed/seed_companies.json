@@ -16,6 +16,7 @@
     {
       "ticker": "NVDA",
       "company_name": "NVIDIA Corporation",
+      "short_name": "NVIDIA",
       "short_description": "NVIDIA makes the graphics chips that power many gaming PCs and the big computers that train AI. If you play on a high-end PC or see AI tools everywhere, NVIDIA is usually behind the scenes.",
       "current_price": null,
       "price_change_percent": null,
@@ -48,6 +49,7 @@
     {
       "ticker": "AMD",
       "company_name": "Advanced Micro Devices, Inc.",
+      "short_name": "AMD",
       "short_description": "AMD makes processors and graphics chips for PCs, game consoles, and data centers. You may know its Ryzen chips in laptops or Radeon graphics in gaming PCs.",
       "current_price": null,
       "price_change_percent": null,
@@ -80,6 +82,7 @@
     {
       "ticker": "RBLX",
       "company_name": "Roblox Corporation",
+      "short_name": "Roblox",
       "short_description": "Roblox is a free app where millions of people play games that other players build, and spend real money on Robux, its in-game currency, for outfits and extras.",
       "current_price": null,
       "price_change_percent": null,
@@ -113,6 +116,7 @@
     {
       "ticker": "TTWO",
       "company_name": "Take-Two Interactive Software, Inc.",
+      "short_name": "Take-Two",
       "short_description": "Take-Two makes popular video games such as Grand Theft Auto, NBA 2K, and Red Dead Redemption. It publishes games for consoles, PCs, and phones.",
       "current_price": null,
       "price_change_percent": null,
@@ -145,6 +149,7 @@
     {
       "ticker": "NTES",
       "company_name": "NetEase, Inc.",
+      "short_name": "NetEase",
       "short_description": "NetEase makes and runs popular mobile and PC games in China and around the world, including long-running hits and newer titles people play on phones and computers.",
       "current_price": null,
       "price_change_percent": null,
@@ -152,7 +157,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was about RMB30.1 billion (about US$4.4 billion), up 7.9% from a year ago. Games brought in about RMB25.0 billion, up 9.7%, as titles like Fantasy Westward Journey and Where Winds Meet kept players spending.",
+      "quarterly_summary": "Revenue was about 30.1 billion Chinese yuan (RMB, about US$4.4 billion), up 7.9% from a year ago. Games brought in about RMB25.0 billion (about US$3.7 billion), up 9.7%, as titles like Fantasy Westward Journey and Where Winds Meet kept players spending — NetEase reports in yuan, but its U.S. stock price is in dollars.",
       "last_quarter_date": "2026-06-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -178,6 +183,7 @@
     {
       "ticker": "U",
       "company_name": "Unity Software Inc.",
+      "short_name": "Unity",
       "short_description": "Unity makes the software tools many studios use to build video games for phones, PCs, and consoles. If a game feels smooth across devices, Unity may be behind it.",
       "current_price": null,
       "price_change_percent": null,
@@ -210,6 +216,7 @@
     {
       "ticker": "MSFT",
       "company_name": "Microsoft Corporation",
+      "short_name": "Microsoft",
       "short_description": "Microsoft makes Windows, Office, Xbox, and cloud services many people use at work and at home. Xbox games, Game Pass, and Azure are part of everyday tech for millions.",
       "current_price": null,
       "price_change_percent": null,
@@ -217,7 +224,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $92.3 billion, up 19% from a year ago. Cloud kept growing fast; Xbox content and services sales were down a little, about 2%.",
+      "quarterly_summary": "Revenue was $92.3 billion, up 19% from a year ago. Cloud kept growing fast; money from Xbox games and Game Pass was down a little, about 2%.",
       "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -242,6 +249,7 @@
     {
       "ticker": "SONY",
       "company_name": "Sony Group Corporation",
+      "short_name": "Sony",
       "short_description": "Sony makes PlayStation consoles and games, plus headphones, cameras, and entertainment. If you play on a PS5 or listen with Sony earbuds, you already know the brand.",
       "current_price": null,
       "price_change_percent": null,
@@ -249,7 +257,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "PlayStation and related game services brought in about ¥937 billion, roughly flat with a year ago. Profit from that gaming business rose 37%.",
+      "quarterly_summary": "PlayStation and its game services brought in about ¥937 billion (Japanese yen), roughly flat with a year ago, while profit from that gaming business rose 37%. Sony reports in yen, but its U.S. stock price is in dollars.",
       "last_quarter_date": "2026-06-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -275,6 +283,7 @@
     {
       "ticker": "BKNG",
       "company_name": "Booking Holdings Inc.",
+      "short_name": "Booking Holdings",
       "short_description": "Booking Holdings runs Booking.com, Priceline, and Kayak — websites people use to reserve hotels, flights, and vacation stays around the world.",
       "current_price": null,
       "price_change_percent": null,
@@ -282,7 +291,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "People booked about $54.5 billion of travel through Booking's sites, up 10% from a year ago. Reported sales were $8.89 billion after a one-time cut tied to a U.S. consumer-protection case.",
+      "quarterly_summary": "People booked about $54.5 billion of travel through Booking's sites, up 10% from a year ago. Booking's own revenue was $8.89 billion, lowered by a one-time charge from a U.S. consumer-protection case.",
       "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -309,6 +318,7 @@
     {
       "ticker": "ABNB",
       "company_name": "Airbnb, Inc.",
+      "short_name": "Airbnb",
       "short_description": "Airbnb is the app people use to rent homes, apartments, and unique stays from hosts in cities and vacation spots worldwide.",
       "current_price": null,
       "price_change_percent": null,
@@ -316,7 +326,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $3.61 billion, up 17% from a year ago. Guests booked about 148 million nights and seats, up 10%.",
+      "quarterly_summary": "Revenue was $3.61 billion, up 17% from a year ago. Guests booked about 148 million nights and experience spots combined, up 10%.",
       "last_quarter_date": "2026-06-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -342,7 +352,8 @@
     {
       "ticker": "MAR",
       "company_name": "Marriott International, Inc.",
-      "short_description": "Marriott runs or franchises hotel brands such as Marriott, Courtyard, Westin, and Ritz-Carlton that travelers stay in around the world.",
+      "short_name": "Marriott",
+      "short_description": "Marriott runs hotel brands such as Marriott, Courtyard, Westin, and Ritz-Carlton, and lets other owners run hotels under its names, for travelers around the world.",
       "current_price": null,
       "price_change_percent": null,
       "holder_count": null,
@@ -374,6 +385,7 @@
     {
       "ticker": "HLT",
       "company_name": "Hilton Worldwide Holdings Inc.",
+      "short_name": "Hilton",
       "short_description": "Hilton is behind hotel brands such as Hilton, Hampton, DoubleTree, and Embassy Suites that travelers book for business and vacations.",
       "current_price": null,
       "price_change_percent": null,
@@ -406,6 +418,7 @@
     {
       "ticker": "DAL",
       "company_name": "Delta Air Lines, Inc.",
+      "short_name": "Delta",
       "short_description": "Delta is a major U.S. airline people fly for trips across the country and overseas. Its hubs include Atlanta, New York, and Los Angeles.",
       "current_price": null,
       "price_change_percent": null,
@@ -438,6 +451,7 @@
     {
       "ticker": "LUV",
       "company_name": "Southwest Airlines Co.",
+      "short_name": "Southwest",
       "short_description": "Southwest is a popular U.S. airline known for domestic flights and a more casual boarding style. Many people use it for city-to-city trips.",
       "current_price": null,
       "price_change_percent": null,
@@ -445,7 +459,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Operating revenue hit a company third-quarter record of $8.4 billion, up 21.2% from a year ago. Travelers paid more per trip even as fuel costs jumped.",
+      "quarterly_summary": "Revenue hit $8.4 billion, Southwest's best July–September quarter ever, up 21.2% from a year ago. Travelers paid more per trip even as fuel costs jumped.",
       "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -470,6 +484,7 @@
     {
       "ticker": "EXPE",
       "company_name": "Expedia Group, Inc.",
+      "short_name": "Expedia",
       "short_description": "Expedia Group runs Expedia, Hotels.com, and Vrbo — apps and sites people use to book flights, hotels, and vacation rentals.",
       "current_price": null,
       "price_change_percent": null,
@@ -502,6 +517,7 @@
     {
       "ticker": "UBER",
       "company_name": "Uber Technologies, Inc.",
+      "short_name": "Uber",
       "short_description": "Uber is the app people open for rides across town and for food delivery. It also helps move freight for businesses.",
       "current_price": null,
       "price_change_percent": null,
@@ -535,6 +551,7 @@
     {
       "ticker": "LYV",
       "company_name": "Live Nation Entertainment, Inc.",
+      "short_name": "Live Nation",
       "short_description": "Live Nation puts on concerts worldwide and owns Ticketmaster, the ticketing site many people use to buy seats for shows.",
       "current_price": null,
       "price_change_percent": null,
@@ -567,6 +584,7 @@
     {
       "ticker": "SPOT",
       "company_name": "Spotify Technology S.A.",
+      "short_name": "Spotify",
       "short_description": "Spotify is the streaming app millions use to listen to music, podcasts, and audiobooks on phones and speakers.",
       "current_price": null,
       "price_change_percent": null,
@@ -574,7 +592,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue rose 16% from a year ago to about €5.0 billion. Paid Premium subscribers reached 306 million.",
+      "quarterly_summary": "Revenue rose 16% from a year ago to about €5.0 billion (euros — Spotify reports in euros, but its stock price is in U.S. dollars). People paying for Premium reached 306 million.",
       "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -600,6 +618,7 @@
     {
       "ticker": "WMG",
       "company_name": "Warner Music Group Corp.",
+      "short_name": "Warner Music",
       "short_description": "Warner Music is a major record company behind artists and song catalogs people hear on streaming apps, radio, and in movies.",
       "current_price": null,
       "price_change_percent": null,
@@ -607,7 +626,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $1.86 billion, up 10.4% from a year ago. Both recorded music and song publishing helped the gain.",
+      "quarterly_summary": "Revenue was $1.86 billion, up 10.4% from a year ago. Money from both its artists' recordings and the rights to the songs themselves helped the gain.",
       "last_quarter_date": "2026-06-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -632,6 +651,7 @@
     {
       "ticker": "AAPL",
       "company_name": "Apple Inc.",
+      "short_name": "Apple",
       "short_description": "Apple makes the iPhone, Mac, and AirPods, and runs Apple Music, where people stream songs and playlists on their devices.",
       "current_price": null,
       "price_change_percent": null,
@@ -639,7 +659,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $114.5 billion, up 12% from a year ago. Services, which include Apple Music, hit an all-time high of about $31.6 billion.",
+      "quarterly_summary": "Revenue was $114.5 billion, up 12% from a year ago. Apple's subscriptions and app sales, including Apple Music, hit an all-time high of about $31.6 billion.",
       "last_quarter_date": "2026-09-26",
       "logo_url": null,
       "data_updated_at": null,
@@ -664,6 +684,7 @@
     {
       "ticker": "AMZN",
       "company_name": "Amazon.com, Inc.",
+      "short_name": "Amazon",
       "short_description": "Amazon is the online store and Prime Video/Amazon Music company many people shop and stream with. Alexa speakers and Kindle sit in lots of homes too.",
       "current_price": null,
       "price_change_percent": null,
@@ -671,7 +692,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Sales were $201.9 billion, up 12% from a year ago. Amazon's cloud business, AWS, jumped 39% to about $46 billion.",
+      "quarterly_summary": "Sales were $201.9 billion, up 12% from a year ago. Amazon Web Services (AWS), its cloud business that rents computing power to other companies, jumped 39% to about $46 billion.",
       "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -696,6 +717,7 @@
     {
       "ticker": "SIRI",
       "company_name": "Sirius XM Holdings Inc.",
+      "short_name": "SiriusXM",
       "short_description": "Sirius XM is the satellite and streaming audio service many people listen to in the car for music, sports talk, and podcasts.",
       "current_price": null,
       "price_change_percent": null,
@@ -729,6 +751,7 @@
     {
       "ticker": "SPHR",
       "company_name": "Sphere Entertainment Co.",
+      "short_name": "Sphere Entertainment",
       "short_description": "Sphere Entertainment runs the giant Sphere venue in Las Vegas, where people go for immersive shows and concert residencies, and also operates regional sports TV networks.",
       "current_price": null,
       "price_change_percent": null,
@@ -736,7 +759,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $313.6 million, up 11% from a year ago. The Las Vegas Sphere's show business jumped 29%, helped by The Wizard of Oz experience.",
+      "quarterly_summary": "Revenue was $313.6 million, up 11% from a year ago. Money from shows at the Las Vegas Sphere jumped 29%, helped by The Wizard of Oz experience.",
       "last_quarter_date": "2026-06-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -762,6 +785,7 @@
     {
       "ticker": "TSLA",
       "company_name": "Tesla, Inc.",
+      "short_name": "Tesla",
       "short_description": "Tesla makes electric cars like the Model 3 and Model Y, plus home batteries and solar. Its cars are a common sight on highways and in cities.",
       "current_price": null,
       "price_change_percent": null,
@@ -769,7 +793,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $28.0 billion, roughly flat with a year ago. Profit was $787 million as Tesla spent more on research.",
+      "quarterly_summary": "Revenue was $28.0 billion, roughly flat with a year ago. Tesla kept $787 million as profit after spending more on research.",
       "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -795,6 +819,7 @@
     {
       "ticker": "TM",
       "company_name": "Toyota Motor Corporation",
+      "short_name": "Toyota",
       "short_description": "Toyota makes cars and trucks people drive every day, from Camrys and RAV4s to hybrids. It is one of the world's largest car companies.",
       "current_price": null,
       "price_change_percent": null,
@@ -802,7 +827,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Sales were ¥13.53 trillion, up 10.4% from a year ago. Operating profit was ¥1.06 trillion, down 8.8%.",
+      "quarterly_summary": "Sales were ¥13.53 trillion (Japanese yen), up 10.4% from a year ago, while profit from its main business was ¥1.06 trillion, down 8.8%. Toyota reports in yen, but its U.S. stock price is in dollars.",
       "last_quarter_date": "2026-06-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -828,6 +853,7 @@
     {
       "ticker": "F",
       "company_name": "Ford Motor Company",
+      "short_name": "Ford",
       "short_description": "Ford makes trucks, SUVs, and cars such as the F-150, Mustang, and Bronco that many people drive for work and weekends.",
       "current_price": null,
       "price_change_percent": null,
@@ -860,6 +886,7 @@
     {
       "ticker": "GM",
       "company_name": "General Motors Company",
+      "short_name": "GM",
       "short_description": "General Motors makes Chevrolet, GMC, Cadillac, and Buick vehicles, from everyday trucks to electric models.",
       "current_price": null,
       "price_change_percent": null,
@@ -892,6 +919,7 @@
     {
       "ticker": "RIVN",
       "company_name": "Rivian Automotive, Inc.",
+      "short_name": "Rivian",
       "short_description": "Rivian builds electric trucks and SUVs, including the R1T, R1S, and the newer R2, aimed at outdoor and everyday driving.",
       "current_price": null,
       "price_change_percent": null,
@@ -924,6 +952,7 @@
     {
       "ticker": "RACE",
       "company_name": "Ferrari N.V.",
+      "short_name": "Ferrari",
       "short_description": "Ferrari makes luxury sports cars that enthusiasts dream about and collect. Its cars are known for racing heritage and high price tags.",
       "current_price": null,
       "price_change_percent": null,
@@ -931,7 +960,7 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was €1.90 billion, up 7% from a year ago. Higher-priced cars and custom options helped the luxury brand earn more.",
+      "quarterly_summary": "Revenue was €1.90 billion (euros), up 7% from a year ago, as higher-priced cars and custom options helped the luxury brand earn more. Ferrari reports in euros, but its U.S. stock price is in dollars.",
       "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
@@ -956,6 +985,7 @@
     {
       "ticker": "APTV",
       "company_name": "Aptiv PLC",
+      "short_name": "Aptiv",
       "short_description": "Aptiv makes the electronics, wiring, and safety systems that go inside modern cars, helping vehicles connect, steer, and brake smarter.",
       "current_price": null,
       "price_change_percent": null,
@@ -988,6 +1018,7 @@
     {
       "ticker": "BWA",
       "company_name": "BorgWarner Inc.",
+      "short_name": "BorgWarner",
       "short_description": "BorgWarner makes engines, transmissions, and electric-drive parts that carmakers put into both gas and electric vehicles.",
       "current_price": null,
       "price_change_percent": null,
