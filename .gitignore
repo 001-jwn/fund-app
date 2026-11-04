@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+mobile/.env
 
 # Python virtual environments and bytecode
 .venv/
