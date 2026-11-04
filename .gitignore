@@ -1,0 +1,46 @@
+# Secrets — never commit a real Finnhub key
+.env
+.env.*
+!.env.example
+
+# Python virtual environments and bytecode
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# Local databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Finnhub cache. The client writes cached quotes, profiles, and news
+# under a cache/ directory (backend/cache/finnhub). Cached market data
+# must never be committed.
+cache/
+**/cache/
+backend/cache/
+
+# Live-check and live-results dumps (any JSON the Finnhub checks write)
+*live-check*
+*live_check*
+*live-results*
+*live_results*
+live-check/
+live-results/
+
+# OS / editor
+.DS_Store
+*.log
