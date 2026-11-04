@@ -1,0 +1,1026 @@
+{
+  "schema_version": "1+links",
+  "aligned_to": "builder-proposal.md companies + company_interests; tickers from handoff.md Seed Lists",
+  "generated_at": "2026-11-03T19:30:00-05:00",
+  "notes": [
+    "Field names match Builder companies table exactly. interest_tags is a list for seed convenience (loader writes company_interests rows). Interest values: gaming | travel | music | automobile.",
+    "short_description, quarterly_summary, why_line are null placeholders — Content & QA Coach owns copy in /workspace/fund/content/. Do not treat as drafted.",
+    "holder_count is null for every row (Finnhub ownership endpoints are Premium). Options in finnhub_fields.md §4: (A) 13F institutional holders only — label 'Institutional holders (13F)'; (B) 10-K Item 5 holders of record — excludes brokerage/street-name owners — label 'Holders of record (registered)'; (C) omit/null — recommended for M1.",
+    "Live price/news/logo/last_quarter fields stay null until finnhub_client fills them with a real FINNHUB_API_KEY.",
+    "EA and EB are DELISTED as of Nov 2026 verification — kept in seed; Product Lead said no replacements.",
+    "why_line now lives per (ticker, interest) in 'interests' to match company_interests; status uses 'active'|'delisted' to match companies.status."
+  ],
+  "unique_ticker_count": 31,
+  "delisted_tickers": [],
+  "companies": [
+    {
+      "ticker": "NVDA",
+      "company_name": "NVIDIA Corporation",
+      "short_description": "NVIDIA makes the graphics chips that power many gaming PCs and the big computers that train AI. If you play on a high-end PC or see AI tools everywhere, NVIDIA is usually behind the scenes.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $96.2 billion, up 106% from a year ago. Sales of chips for big data centers were $89.0 billion, up 117%, as customers kept buying chips to run AI.",
+      "last_quarter_date": "2026-07-26",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "gaming"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "gaming",
+          "why_line": "You picked Gaming — NVIDIA makes the graphics chips inside many gaming PCs."
+        }
+      ],
+      "content_sources": [
+        "https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Announces-Financial-Results-for-Second-Quarter-Fiscal-2027/default.aspx"
+      ]
+    },
+    {
+      "ticker": "AMD",
+      "company_name": "Advanced Micro Devices, Inc.",
+      "short_description": "AMD makes processors and graphics chips for PCs, game consoles, and data centers. You may know its Ryzen chips in laptops or Radeon graphics in gaming PCs.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was a record $13.4 billion, up 45% from a year ago. Sales of chips for big data centers nearly doubled to $8.5 billion, while gaming chip sales fell 40%.",
+      "last_quarter_date": "2026-09-26",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "gaming"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "gaming",
+          "why_line": "You picked Gaming — AMD makes the processors and graphics chips inside many gaming PCs and consoles."
+        }
+      ],
+      "content_sources": [
+        "https://ir.amd.com/news-events/press-releases/detail/1303/amd-reports-third-quarter-2026-financial-results"
+      ]
+    },
+    {
+      "ticker": "RBLX",
+      "company_name": "Roblox Corporation",
+      "short_description": "Roblox is a free app where millions of people play games that other players build, and spend real money on Robux, its in-game currency, for outfits and extras.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $1.6 billion, up 16% from a year ago, but the money players spent on Robux fell 12% and daily players dropped 9% to 138 million, after a huge 2025.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "gaming"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "gaming",
+          "why_line": "You picked Gaming, and Roblox is one of the most-played game platforms in the world, especially with teens."
+        }
+      ],
+      "content_sources": [
+        "https://www.sec.gov/Archives/edgar/data/1315098/000162828026068235/ex991-q32026earningsshar.htm",
+        "https://s27.q4cdn.com/984876518/files/content_files/Q3-2026-Earnings-Shareholder-Letter.pdf"
+      ]
+    },
+    {
+      "ticker": "TTWO",
+      "company_name": "Take-Two Interactive Software, Inc.",
+      "short_description": "Take-Two makes popular video games such as Grand Theft Auto, NBA 2K, and Red Dead Redemption. It publishes games for consoles, PCs, and phones.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $1.53 billion, a bit above the year-ago quarter. The company was still preparing for the launch of Grand Theft Auto VI.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "gaming"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "gaming",
+          "why_line": "You picked Gaming — Take-Two makes hit games like Grand Theft Auto and NBA 2K."
+        }
+      ],
+      "content_sources": [
+        "https://www.sec.gov/Archives/edgar/data/946581/000162828026054580/ttwo1q27earningsrelease.htm"
+      ]
+    },
+    {
+      "ticker": "NTES",
+      "company_name": "NetEase, Inc.",
+      "short_description": "NetEase makes and runs popular mobile and PC games in China and around the world, including long-running hits and newer titles people play on phones and computers.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was about RMB30.1 billion (about US$4.4 billion), up 7.9% from a year ago. Games brought in about RMB25.0 billion, up 9.7%, as titles like Fantasy Westward Journey and Where Winds Meet kept players spending.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "gaming"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Replaces EA (delisted) per John's decision 2026-11-03; live Finnhub free check passed 2026-11-03.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "gaming",
+          "why_line": "You picked Gaming — NetEase makes some of the most-played mobile and PC games in China and beyond."
+        }
+      ],
+      "content_sources": [
+        "https://www.sec.gov/Archives/edgar/data/1110646/000110465926098940/tm2623482d1_ex99-1.htm (NetEase Q2 / interim 2026 results announcement, Aug 20, 2026)",
+        "https://www.hkexnews.hk/listedco/listconews/sehk/2026/0924/2026092401601.pdf (NetEase Interim Report 2026)"
+      ]
+    },
+    {
+      "ticker": "U",
+      "company_name": "Unity Software Inc.",
+      "short_description": "Unity makes the software tools many studios use to build video games for phones, PCs, and consoles. If a game feels smooth across devices, Unity may be behind it.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $547 million, up 24% from a year ago. Unity also sold its Supersonic mobile publishing business to focus on its core game engine and ads tools.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "gaming"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Confirmed trading NYSE:U ~2026-11-03.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "gaming",
+          "why_line": "You picked Gaming — Unity makes the game-building tools behind many of the titles people play on phones and consoles."
+        }
+      ],
+      "content_sources": [
+        "https://investors.unity.com/news/news-details/2026/Unity-Reports-Second-Quarter-2026-Financial-Results/default.aspx"
+      ]
+    },
+    {
+      "ticker": "MSFT",
+      "company_name": "Microsoft Corporation",
+      "short_description": "Microsoft makes Windows, Office, Xbox, and cloud services many people use at work and at home. Xbox games, Game Pass, and Azure are part of everyday tech for millions.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $92.3 billion, up 19% from a year ago. Cloud kept growing fast; Xbox content and services sales were down a little, about 2%.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "gaming"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "gaming",
+          "why_line": "You picked Gaming — Microsoft owns Xbox, Game Pass, and a big library of games people play every day."
+        }
+      ],
+      "content_sources": [
+        "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast"
+      ]
+    },
+    {
+      "ticker": "SONY",
+      "company_name": "Sony Group Corporation",
+      "short_description": "Sony makes PlayStation consoles and games, plus headphones, cameras, and entertainment. If you play on a PS5 or listen with Sony earbuds, you already know the brand.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "PlayStation and related game services brought in about ¥937 billion, roughly flat with a year ago. Profit from that gaming business rose 37%.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "gaming"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "US ADR (NYSE:SONY). Price observed ~2026-11-03. Finnhub free US-ticker support expected; live response UNVERIFIED without API key.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "gaming",
+          "why_line": "You picked Gaming — Sony makes PlayStation consoles and many of the games people play on them."
+        }
+      ],
+      "content_sources": [
+        "https://www.sony.com/en/SonyInfo/IR/library/presen/er/pdf/26q1_sonypre.pdf",
+        "https://www.sony.com/en/SonyInfo/IR/library/presen/er/"
+      ]
+    },
+    {
+      "ticker": "BKNG",
+      "company_name": "Booking Holdings Inc.",
+      "short_description": "Booking Holdings runs Booking.com, Priceline, and Kayak — websites people use to reserve hotels, flights, and vacation stays around the world.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "People booked about $54.5 billion of travel through Booking's sites, up 10% from a year ago. Reported sales were $8.89 billion after a one-time cut tied to a U.S. consumer-protection case.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "travel"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "travel",
+          "why_line": "You picked Travel — Booking.com and Kayak are where many people find and book hotels and trips."
+        }
+      ],
+      "content_sources": [
+        "https://www.stocktitan.net/sec-filings/BKNG/8-k-booking-holdings-inc-reports-material-event-c5a461af88ef.html",
+        "https://ir.bookingholdings.com/overview/financials/quarterly-results/default.aspx",
+        "https://ir.bookingholdings.com/events-and-presentations/event-details/2026/Q3-2026-Booking-Holdings-Earnings-Conference-Call/default.aspx"
+      ]
+    },
+    {
+      "ticker": "ABNB",
+      "company_name": "Airbnb, Inc.",
+      "short_description": "Airbnb is the app people use to rent homes, apartments, and unique stays from hosts in cities and vacation spots worldwide.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $3.61 billion, up 17% from a year ago. Guests booked about 148 million nights and seats, up 10%.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "travel"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "travel",
+          "why_line": "You picked Travel — Airbnb is how many people book homes and unique stays instead of a hotel."
+        }
+      ],
+      "content_sources": [
+        "https://news.airbnb.com/airbnb-q2-2026-financial-results",
+        "https://www.sec.gov/Archives/edgar/data/1559720/000119312526337928/d70413dex991.htm"
+      ]
+    },
+    {
+      "ticker": "MAR",
+      "company_name": "Marriott International, Inc.",
+      "short_description": "Marriott runs or franchises hotel brands such as Marriott, Courtyard, Westin, and Ritz-Carlton that travelers stay in around the world.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $7.0 billion, up from $6.5 billion a year ago. Guests paid more per stay on average, and Marriott kept adding hotels.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "travel"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "travel",
+          "why_line": "You picked Travel — Marriott hotels like Courtyard, Westin, and Ritz-Carlton are places many people stay on trips."
+        }
+      ],
+      "content_sources": [
+        "https://marriott.gcs-web.com/news-releases/news-release-details/marriott-international-reports-third-quarter-2026-results"
+      ]
+    },
+    {
+      "ticker": "HLT",
+      "company_name": "Hilton Worldwide Holdings Inc.",
+      "short_description": "Hilton is behind hotel brands such as Hilton, Hampton, DoubleTree, and Embassy Suites that travelers book for business and vacations.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $3.33 billion, up from $3.12 billion a year ago. Guests paid more per stay on average, and Hilton kept adding hotels.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "travel"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "travel",
+          "why_line": "You picked Travel — Hilton hotels like Hampton and DoubleTree are common stays for trips and work travel."
+        }
+      ],
+      "content_sources": [
+        "https://ir.hilton.com/news-events/investor-news/detail/419/hilton-reports-third-quarter-results"
+      ]
+    },
+    {
+      "ticker": "DAL",
+      "company_name": "Delta Air Lines, Inc.",
+      "short_description": "Delta is a major U.S. airline people fly for trips across the country and overseas. Its hubs include Atlanta, New York, and Los Angeles.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $17.6 billion, up about 16% from a year ago. Higher ticket prices and strong demand helped cover much higher fuel costs.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "travel"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "travel",
+          "why_line": "You picked Travel — Delta is one of the big airlines people fly for vacations and visits."
+        }
+      ],
+      "content_sources": [
+        "https://ir.delta.com/news/news-details/2026/Delta-Air-Lines-Announces-September-Quarter-2026-Financial-Results/default.aspx"
+      ]
+    },
+    {
+      "ticker": "LUV",
+      "company_name": "Southwest Airlines Co.",
+      "short_description": "Southwest is a popular U.S. airline known for domestic flights and a more casual boarding style. Many people use it for city-to-city trips.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Operating revenue hit a company third-quarter record of $8.4 billion, up 21.2% from a year ago. Travelers paid more per trip even as fuel costs jumped.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "travel"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "travel",
+          "why_line": "You picked Travel — Southwest is a go-to airline for many people flying around the U.S."
+        }
+      ],
+      "content_sources": [
+        "https://investors.southwest.com/news-events/press-releases/detail/1947/southwest-airlines-reports-third-quarter-2026-results-record-revenue-performance-drives-year-over-year-margin-expansion"
+      ]
+    },
+    {
+      "ticker": "EXPE",
+      "company_name": "Expedia Group, Inc.",
+      "short_description": "Expedia Group runs Expedia, Hotels.com, and Vrbo — apps and sites people use to book flights, hotels, and vacation rentals.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $4.32 billion, up 14% from a year ago. The total value of trips people booked rose 12%.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "travel"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "travel",
+          "why_line": "You picked Travel — Expedia, Hotels.com, and Vrbo are tools many people use to plan and book trips."
+        }
+      ],
+      "content_sources": [
+        "https://ir.expediagroup.com/news-and-events/news/news-details/2026/Expedia-Group-Reports-Second-Quarter-2026-Results/default.aspx"
+      ]
+    },
+    {
+      "ticker": "UBER",
+      "company_name": "Uber Technologies, Inc.",
+      "short_description": "Uber is the app people open for rides across town and for food delivery. It also helps move freight for businesses.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $14.2 billion, up 12% from a year ago. Rides and food delivery stayed the main ways people use Uber day to day.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "travel"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "travel",
+          "why_line": "You picked Travel — Uber is how many people get around cities when they visit somewhere new."
+        }
+      ],
+      "content_sources": [
+        "https://investor.uber.com/news-events/news/press-release-details/2026/Uber-Announces-Results-for-Second-Quarter-2026/default.aspx",
+        "https://www.sec.gov/Archives/edgar/data/1543151/000154315126000027/uberq226earningspressrelea.htm"
+      ]
+    },
+    {
+      "ticker": "LYV",
+      "company_name": "Live Nation Entertainment, Inc.",
+      "short_description": "Live Nation puts on concerts worldwide and owns Ticketmaster, the ticketing site many people use to buy seats for shows.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $7.7 billion, up 9% from a year ago. About 49 million fans attended its shows, up 10%.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "music"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "music",
+          "why_line": "You picked Music — Live Nation and Ticketmaster are behind many of the concerts people go to."
+        }
+      ],
+      "content_sources": [
+        "https://news.livenationentertainment.com/news/live-nation-entertainment-reports-second-quarter-2026-results"
+      ]
+    },
+    {
+      "ticker": "SPOT",
+      "company_name": "Spotify Technology S.A.",
+      "short_description": "Spotify is the streaming app millions use to listen to music, podcasts, and audiobooks on phones and speakers.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue rose 16% from a year ago to about €5.0 billion. Paid Premium subscribers reached 306 million.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "music"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "music",
+          "why_line": "You picked Music — Spotify is one of the main apps people open to stream songs and podcasts."
+        }
+      ],
+      "content_sources": [
+        "https://newsroom.spotify.com/2026-10-22/spotify-q3-2026-earnings/",
+        "https://www.sec.gov/Archives/edgar/data/1639920/000162828026066889/spot-20260930x6xk.htm"
+      ]
+    },
+    {
+      "ticker": "WMG",
+      "company_name": "Warner Music Group Corp.",
+      "short_description": "Warner Music is a major record company behind artists and song catalogs people hear on streaming apps, radio, and in movies.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $1.86 billion, up 10.4% from a year ago. Both recorded music and song publishing helped the gain.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "music"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Confirmed still trading NASDAQ:WMG ~2026-11-03.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "music",
+          "why_line": "You picked Music — Warner Music works with many of the artists whose songs fill playlists and charts."
+        }
+      ],
+      "content_sources": [
+        "https://investors.wmg.com/news-events/news-releases/news-details/2026/Warner-Music-Group-Corp--Reports-Results-for-Fiscal-Third-Quarter-Ended-June-30-2026/default.aspx"
+      ]
+    },
+    {
+      "ticker": "AAPL",
+      "company_name": "Apple Inc.",
+      "short_description": "Apple makes the iPhone, Mac, and AirPods, and runs Apple Music, where people stream songs and playlists on their devices.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $114.5 billion, up 12% from a year ago. Services, which include Apple Music, hit an all-time high of about $31.6 billion.",
+      "last_quarter_date": "2026-09-26",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "music"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research. Music via Apple Music / services.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "music",
+          "why_line": "You picked Music — Apple Music is one of the big ways people stream songs on iPhones and other devices."
+        }
+      ],
+      "content_sources": [
+        "https://www.apple.com/newsroom/2026/11/apple-reports-fourth-quarter-results/"
+      ]
+    },
+    {
+      "ticker": "AMZN",
+      "company_name": "Amazon.com, Inc.",
+      "short_description": "Amazon is the online store and Prime Video/Amazon Music company many people shop and stream with. Alexa speakers and Kindle sit in lots of homes too.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Sales were $201.9 billion, up 12% from a year ago. Amazon's cloud business, AWS, jumped 39% to about $46 billion.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "music"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research. Music via Amazon Music / devices.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "music",
+          "why_line": "You picked Music — Amazon Music and Alexa are how many people stream songs at home and on the go."
+        }
+      ],
+      "content_sources": [
+        "https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-Announces-Third-Quarter-Results/"
+      ]
+    },
+    {
+      "ticker": "SIRI",
+      "company_name": "Sirius XM Holdings Inc.",
+      "short_description": "Sirius XM is the satellite and streaming audio service many people listen to in the car for music, sports talk, and podcasts.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $2.15 billion, down slightly from a year ago. Profit rose 7% to $317 million.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "music"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Post–Liberty Media split-off/merger (Sep 2024) still trades as NASDAQ:SIRI.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "music",
+          "why_line": "You picked Music — Sirius XM is the audio many people hear in the car for music and talk shows."
+        }
+      ],
+      "content_sources": [
+        "https://investor.siriusxm.com/sec-filings/all-sec-filings/content/0000908937-26-000027/siriq32026earningsrelease.htm",
+        "https://www.sec.gov/Archives/edgar/data/908937/000090893726000028/siri-20260930.htm"
+      ]
+    },
+    {
+      "ticker": "SPHR",
+      "company_name": "Sphere Entertainment Co.",
+      "short_description": "Sphere Entertainment runs the giant Sphere venue in Las Vegas, where people go for immersive shows and concert residencies, and also operates regional sports TV networks.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $313.6 million, up 11% from a year ago. The Las Vegas Sphere's show business jumped 29%, helped by The Wizard of Oz experience.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "music"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Replaces EB (delisted) per John's decision 2026-11-03; live Finnhub free check passed 2026-11-03.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "music",
+          "why_line": "You picked Music — Sphere is the big Las Vegas venue where people go for immersive shows and concert residencies."
+        }
+      ],
+      "content_sources": [
+        "https://investor.sphereentertainmentco.com/press-releases/news-details/2026/Sphere-Entertainment-Co--Reports-Second-Quarter-2026-Results/default.aspx (SPHR Q2 2026 results, July 30, 2026)",
+        "https://investor.sphereentertainmentco.com/press-releases/news-details/2026/Sphere-Entertainment-Co--to-Host-Third-Quarter-2026-Conference-Call/default.aspx (Q3 call notice for Nov 5, 2026)"
+      ]
+    },
+    {
+      "ticker": "TSLA",
+      "company_name": "Tesla, Inc.",
+      "short_description": "Tesla makes electric cars like the Model 3 and Model Y, plus home batteries and solar. Its cars are a common sight on highways and in cities.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $28.0 billion, roughly flat with a year ago. Profit was $787 million as Tesla spent more on research.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "automobile"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "automobile",
+          "why_line": "You picked Automobile — Tesla makes many of the electric cars people see on the road."
+        }
+      ],
+      "content_sources": [
+        "https://www.sec.gov/Archives/edgar/data/1318605/000162828026066775/tsla-20260930.htm",
+        "https://www.stocktitan.net/sec-filings/TSLA/8-k-tesla-inc-reports-material-event-d0581c0d340c.html"
+      ]
+    },
+    {
+      "ticker": "TM",
+      "company_name": "Toyota Motor Corporation",
+      "short_description": "Toyota makes cars and trucks people drive every day, from Camrys and RAV4s to hybrids. It is one of the world's largest car companies.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Sales were ¥13.53 trillion, up 10.4% from a year ago. Operating profit was ¥1.06 trillion, down 8.8%.",
+      "last_quarter_date": "2026-06-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "automobile"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "US ADR (NYSE:TM). Still trading Nov 2026; Finnhub free support expected for US ticker, UNVERIFIED without key.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "automobile",
+          "why_line": "You picked Automobile — Toyota makes everyday cars and hybrids like the Camry and RAV4 that many families drive."
+        }
+      ],
+      "content_sources": [
+        "https://global.toyota/pages/global_toyota/ir/financial-results/2027_1q_summary_en.pdf",
+        "https://global.toyota/en/ir/financial-results/index.html"
+      ]
+    },
+    {
+      "ticker": "F",
+      "company_name": "Ford Motor Company",
+      "short_description": "Ford makes trucks, SUVs, and cars such as the F-150, Mustang, and Bronco that many people drive for work and weekends.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $49.5 billion, down about 2% from a year ago. Profit was $2.0 billion.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "automobile"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "automobile",
+          "why_line": "You picked Automobile — Ford builds trucks and SUVs like the F-150 and Bronco that many people drive."
+        }
+      ],
+      "content_sources": [
+        "https://www.sec.gov/Archives/edgar/data/37996/000003799626000190/exhibit99tooctober282026.htm"
+      ]
+    },
+    {
+      "ticker": "GM",
+      "company_name": "General Motors Company",
+      "short_description": "General Motors makes Chevrolet, GMC, Cadillac, and Buick vehicles, from everyday trucks to electric models.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $50.0 billion, up about 2.9% from a year ago. Profit was $3.3 billion.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "automobile"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "automobile",
+          "why_line": "You picked Automobile — GM makes Chevy, GMC, and Cadillac vehicles many people buy and drive."
+        }
+      ],
+      "content_sources": [
+        "https://investor.gm.com/static-files/c79ce1e6-c1f9-41cc-b503-1b98e1dbdfb2"
+      ]
+    },
+    {
+      "ticker": "RIVN",
+      "company_name": "Rivian Automotive, Inc.",
+      "short_description": "Rivian builds electric trucks and SUVs, including the R1T, R1S, and the newer R2, aimed at outdoor and everyday driving.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $2.155 billion, up 38% from a year ago. Deliveries rose 46%, and the R2 became Rivian's best-selling model that quarter.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "automobile"
+      ],
+      "exchange": "NASDAQ",
+      "listing_notes": "Still listed as of Nov 2026 research.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "automobile",
+          "why_line": "You picked Automobile — Rivian makes electric trucks and SUVs for people who want adventure-ready EVs."
+        }
+      ],
+      "content_sources": [
+        "https://rivian.com/newsroom/article/rivian-releases-third-quarter-2026-financial-results"
+      ]
+    },
+    {
+      "ticker": "RACE",
+      "company_name": "Ferrari N.V.",
+      "short_description": "Ferrari makes luxury sports cars that enthusiasts dream about and collect. Its cars are known for racing heritage and high price tags.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was €1.90 billion, up 7% from a year ago. Higher-priced cars and custom options helped the luxury brand earn more.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "automobile"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Confirmed NYSE:RACE trading ~2026-11-03.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "automobile",
+          "why_line": "You picked Automobile — Ferrari makes the iconic sports cars many car fans follow and dream about."
+        }
+      ],
+      "content_sources": [
+        "https://www.globenewswire.com/news-release/2026/11/03/3394014/0/en/strong-mix-and-personalizations-sustain-q3-growth-and-further-2026-guidance-upgrade.html"
+      ]
+    },
+    {
+      "ticker": "APTV",
+      "company_name": "Aptiv PLC",
+      "short_description": "Aptiv makes the electronics, wiring, and safety systems that go inside modern cars, helping vehicles connect, steer, and brake smarter.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $3.2 billion, up 2% from a year ago. Demand for the electronics inside cars stayed steady.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "automobile"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "NYSE mapping + SEC filing activity on 2026-11-03; treated as listed.",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "automobile",
+          "why_line": "You picked Automobile — Aptiv builds the electronics and safety systems inside many of today's cars."
+        }
+      ],
+      "content_sources": [
+        "https://www.sec.gov/Archives/edgar/data/1521332/000152133226000071/aptvq32026ex991.htm"
+      ]
+    },
+    {
+      "ticker": "BWA",
+      "company_name": "BorgWarner Inc.",
+      "short_description": "BorgWarner makes engines, transmissions, and electric-drive parts that carmakers put into both gas and electric vehicles.",
+      "current_price": null,
+      "price_change_percent": null,
+      "holder_count": null,
+      "latest_news_headline": null,
+      "latest_news_summary": null,
+      "latest_news_date": null,
+      "quarterly_summary": "Revenue was $3.49 billion, down 2.9% from a year ago. Parts for both gas and electric cars still made up the bulk of sales.",
+      "last_quarter_date": "2026-09-30",
+      "logo_url": null,
+      "data_updated_at": null,
+      "interest_tags": [
+        "automobile"
+      ],
+      "exchange": "NYSE",
+      "listing_notes": "Still listed as of Nov 2026 research (sampled).",
+      "live_fields_source": "finnhub_free",
+      "content_status": "drafted_sourced",
+      "status": "active",
+      "interests": [
+        {
+          "interest": "automobile",
+          "why_line": "You picked Automobile — BorgWarner makes parts that help both gas and electric cars run."
+        }
+      ],
+      "content_sources": [
+        "https://www.borgwarner.com/newsroom/press-releases/2026/10/29/borgwarner-reports-strong-third-quarter-2026-results--increases-2026-adjusted-eps-guidance--announces-9-awards-across-portfolio-to-support-long-term-profitable-growth",
+        "https://www.sec.gov/Archives/edgar/data/908255/000090825526000062/bwa-20260930.htm"
+      ]
+    }
+  ],
+  "replaced_tickers": {
+    "EA": "NTES",
+    "EB": "SPHR"
+  }
+}
