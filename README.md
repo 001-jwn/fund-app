@@ -2,6 +2,17 @@
 
 fun(d) is a simple website that shows public companies matching interests you pick: Gaming, Travel, Music, or Automobile. You look at one company at a time, press Like or Dislike, and the companies you like show up under Matches.
 
+## How the card order works
+
+1. A stock you disliked never comes back. A stock you liked doesn't come back either, because it already lives in Matches. That part already works and stays as it is.
+2. You still only see stocks that match an interest you picked.
+3. Each remaining stock gets a score. For every stock you liked, count how many interest tags (Gaming, Travel, Music, Automobile) it shares with this stock, then add those counts up. Score 0 means it shares nothing with your likes.
+4. Stocks with a higher score come first. When scores tie, they go A to Z by ticker, the same as today, so the order never shuffles randomly.
+5. If you haven't liked anything yet, every score is 0, so the feed looks exactly like M1.
+6. Each card gets an optional `because_liked` field: the name of the liked stock that shares the most tags with it, counting the interest the card is being shown for (on a tie, the one liked most recently, then the ticker A to Z). It's null when the score is 0. The hint is skipped when you picked exactly one interest and the only thing in common is the interest the card is being shown for. The Frontend can show "Because you liked X" from it (E2).
+
+Known limit: if you picked only one interest, every stock already shares that tag, so the order moves only for stocks that also carry a second tag. No ML and no weights. The only inputs are your likes, your dislikes and the seed's tags.
+
 The iPhone steps are in [iPhone app](#iphone-app). That app uses the backend from [Running for the iPhone app](#running-for-the-iphone-app).
 
 You do not need to know how to code. Do the steps in order. Each terminal step is one command. Copy the whole line, paste it into the VS Code terminal, and press Enter.
@@ -516,4 +527,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `27 passed`.
+The last line should include `33 passed`.

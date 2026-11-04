@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Company, CompanyInterest, Dislike, Like, User, UserInterest
 from app.schemas import CardOut, CardsOut
-from app.services.cards import choose_interest_link, public_card
+from app.services.cards import LikedCompany, index_company_interests, order_feed_cards
 
 router = APIRouter()
 
@@ -28,22 +28,32 @@ def get_cards(
     if not user_interests:
         return CardsOut(cards=[])
 
-    excluded = {row[0] for row in db.query(Like.ticker).filter(Like.user_id == user_id).all()}
+    like_rows = db.query(Like).filter(Like.user_id == user_id).all()
+    excluded = {row.ticker for row in like_rows}
     excluded.update(row[0] for row in db.query(Dislike.ticker).filter(Dislike.user_id == user_id).all())
+
+    links_by_ticker, tags_by_ticker = index_company_interests(db.query(CompanyInterest).all())
+
+    names: dict[str, str] = {}
+    liked_tickers = [row.ticker for row in like_rows]
+    if liked_tickers:
+        for company in db.query(Company).filter(Company.ticker.in_(liked_tickers)).all():
+            names[company.ticker] = company.company_name
+
+    liked = [
+        LikedCompany(
+            ticker=row.ticker,
+            company_name=names.get(row.ticker, row.ticker),
+            created_at=row.created_at,
+            tags=frozenset(tags_by_ticker.get(row.ticker, ())),
+        )
+        for row in like_rows
+    ]
 
     query = db.query(Company).filter(Company.status == "active")
     if excluded:
         query = query.filter(~Company.ticker.in_(excluded))
-    companies = query.order_by(Company.ticker).all()
+    companies = query.all()
 
-    cards: list[CardOut] = []
-    for company in companies:
-        links = db.query(CompanyInterest).filter(CompanyInterest.ticker == company.ticker).all()
-        link = choose_interest_link(links, user_interests)
-        if link is None:
-            continue
-        cards.append(CardOut(**public_card(company, link)))
-        if len(cards) >= limit:
-            break
-
-    return CardsOut(cards=cards)
+    ordered = order_feed_cards(companies, links_by_ticker, tags_by_ticker, user_interests, liked)
+    return CardsOut(cards=[CardOut(**card) for card in ordered[:limit]])
