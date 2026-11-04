@@ -115,23 +115,31 @@ def because_liked_name(
     tags: set[str],
     card_interest: str,
     liked: list[LikedCompany],
+    *,
+    single_interest: bool,
 ) -> str | None:
-    """Company name of the liked stock that shares the most tags besides card_interest.
+    """Company name of the liked stock that shares the most tags with this card.
 
-    card_interest is the interest this card is shown for (choose_interest_link).
-    A higher count of those other tags wins. A tie uses the later Like.created_at,
-    then ticker A to Z. None when no liked company shares any other tag, including
-    when the only tag in common is the one this card is being shown for.
+    Count every shared tag, including card_interest (the interest this card is
+    shown for). A higher count wins. A tie uses the later Like.created_at, then
+    ticker A to Z. None when no liked company shares any counted tag, which is
+    when the feed score is 0.
+
+    If the user picked exactly one interest, do not count card_interest. The
+    hint stays empty when that shown interest is the only tag in common.
     """
     winner: LikedCompany | None = None
     winner_count = 0
     for like in liked:
-        other_count = len((tags & like.tags) - {card_interest})
-        if other_count == 0:
+        shared = tags & like.tags
+        if single_interest:
+            shared = shared - {card_interest}
+        count = len(shared)
+        if count == 0:
             continue
-        if winner is None or _preferred_because(like, other_count, winner, winner_count):
+        if winner is None or _preferred_because(like, count, winner, winner_count):
             winner = like
-            winner_count = other_count
+            winner_count = count
     if winner is None:
         return None
     return winner.company_name
@@ -164,6 +172,7 @@ def order_feed_cards(
     liked: list[LikedCompany],
 ) -> list[dict]:
     """Cards that match a picked interest, highest score first, then ticker A to Z."""
+    single_interest = len(user_interests) == 1
     scored: list[tuple[int, str, dict]] = []
     for company in companies:
         links = links_by_ticker.get(company.ticker, [])
@@ -172,7 +181,12 @@ def order_feed_cards(
             continue
         tags = tags_by_ticker.get(company.ticker, set())
         card = public_card(company, link)
-        card["because_liked"] = because_liked_name(tags, link.interest, liked)
+        card["because_liked"] = because_liked_name(
+            tags,
+            link.interest,
+            liked,
+            single_interest=single_interest,
+        )
         scored.append((feed_score(tags, liked), company.ticker, card))
     scored.sort(key=lambda item: (-item[0], item[1]))
     return [item[2] for item in scored]

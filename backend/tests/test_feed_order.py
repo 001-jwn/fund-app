@@ -104,9 +104,12 @@ def test_liked_and_disliked_never_return_and_shared_tags_rank_higher(client):
     assert tickers == sorted(GAMING - {"NVDA", "AMD"}) + sorted(TRAVEL)
     assert "NVDA" not in tickers
     assert "AMD" not in tickers
-    # Every remaining gaming stock shares only Gaming with NVIDIA, so the hint stays empty.
+    # Two interests, so the shared Gaming tag is enough to name NVIDIA.
     for card in cards:
-        assert card["because_liked"] is None
+        if card["ticker"] in GAMING:
+            assert card["because_liked"] == "NVIDIA Corporation"
+        else:
+            assert card["because_liked"] is None
     assert _cards(client, user_id) == cards
 
 
@@ -189,13 +192,14 @@ def test_because_liked_tie_breaks_are_deterministic(client):
     assert card["ticker"] == "CARD"
     assert card["interest"] == "gaming"
     assert card["why_line"] == "WHY-CARD-gaming"
-    # ZZZZ was liked later, but BIGL shares more tags besides Gaming.
+    # Four interests, so every shared tag counts. ZZZZ was liked later, but BIGL shares more tags.
     assert card["because_liked"] == "Big Overlap Co"
     booking = next(item for item in cards if item["ticker"] == "BKNG")
     assert booking["interest"] == "travel"
-    assert booking["because_liked"] is None
+    # Booking shares Travel with both likes. ZZZZ was liked later, so it wins the tie.
+    assert booking["because_liked"] == "Zulu Tie Co"
     spotify = next(item for item in cards if item["ticker"] == "SPOT")
-    assert spotify["because_liked"] is None
+    assert spotify["because_liked"] == "Big Overlap Co"
 
     # Same other-tag count: the later like wins, even when its ticker comes later.
     assert client.post("/dislike", json={"user_id": user_id, "ticker": "BIGL"}).status_code == 200
@@ -215,3 +219,18 @@ def test_because_liked_tie_breaks_are_deterministic(client):
     assert tied == _cards(client, user_id)
     card = next(item for item in tied if item["ticker"] == "CARD")
     assert card["because_liked"] == "Alpha Tie Co"
+
+
+def test_all_four_interests_names_sony_on_the_amd_card(client):
+    user_id = _onboard(client, ["gaming", "travel", "music", "automobile"])
+    liked = client.post("/like", json={"user_id": user_id, "ticker": "SONY"})
+    assert liked.status_code == 200
+
+    cards = _cards(client, user_id)
+    amd = next(card for card in cards if card["ticker"] == "AMD")
+    assert amd["interest"] == "gaming"
+    assert amd["why_line"].startswith("You picked Gaming")
+    assert amd["because_liked"] == "Sony Group Corporation"
+    assert "SONY" not in {card["ticker"] for card in cards}
+    travel = next(card for card in cards if card["ticker"] == "BKNG")
+    assert travel["because_liked"] is None
