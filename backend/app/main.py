@@ -1,10 +1,15 @@
 """fun(d) API. Run from the backend folder:
 
     python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+To accept connections from an iPhone on the same Wi-Fi:
+
+    python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -40,11 +45,19 @@ async def lifespan(_app: FastAPI):
         dbmod.ENGINE.dispose()
 
 
+def allowed_origins() -> list[str]:
+    """Origins from CORS_ORIGINS (comma-separated). Any origin when unset."""
+    raw = os.environ.get("CORS_ORIGINS", "")
+    origins = [part.strip() for part in raw.split(",") if part.strip()]
+    return origins or ["*"]
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="fun(d)", lifespan=lifespan)
+    # No cookies or auth, so credentials stay off and "*" is a valid default.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=allowed_origins(),
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
