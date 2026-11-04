@@ -313,7 +313,7 @@ The prompts come back. The app is stopped. Your likes stay in the local database
 
 ## Running for the iPhone app
 
-Do this only on a Mac, and only when the fun(d) app in Expo Go on an iPhone should use this backend. The iPhone and the Mac have to be on the same Wi-Fi. The website steps above stay the same, including the `127.0.0.1` command in step 9.
+Do this only on a Mac, and only when the fun(d) app in Expo Go on an iPhone should use this backend. The iPhone and the Mac have to be on the same Wi-Fi. Do this only on your home Wi-Fi, never on public Wi-Fi. The website steps above stay the same, including the `127.0.0.1` command in step 9.
 
 1. Get the Mac's Wi-Fi address. In a terminal, run:
 
@@ -323,15 +323,25 @@ ipconfig getifaddr en0
 
 You should see a number like `192.168.1.42`. That is the Mac's IP. Use that number wherever a step says `<Mac-IP>`.
 
+If `ipconfig getifaddr en0` prints nothing, try:
+
+```
+ipconfig getifaddr en1
+```
+
+You can also find the IP under System Settings > Wi-Fi > Details.
+
+The Mac's IP can change. If the phone stops connecting, rerun `ipconfig getifaddr en0` and update `EXPO_PUBLIC_API_URL` in `mobile/.env`.
+
 2. Start the backend so the iPhone can reach it. If the backend from step 9 is still running, click that terminal and press Ctrl+C. Then, from the `fund-app` folder, run:
 
 ```
 .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir backend
 ```
 
-That is `uvicorn app.main:app --host 0.0.0.0 --port 8000`. Leave this terminal open. You should see `Uvicorn running on http://0.0.0.0:8000`.
+Leave this terminal open. You should see `Uvicorn running on http://0.0.0.0:8000`.
 
-The macOS firewall will ask to allow incoming connections for Python. Click Allow.
+The firewall prompt appears only when the macOS firewall is on. If it asks to allow incoming connections for Python, click Allow. If you clicked Deny, allow it later in System Settings > Network > Firewall > Options by setting Python to allow incoming connections.
 
 3. On the iPhone, open Safari and go to `http://<Mac-IP>:8000/health`.
 
