@@ -7,6 +7,7 @@ import {
   Animated,
   Button,
   Image,
+  Linking,
   PanResponder,
   Pressable,
   ScrollView,
@@ -19,6 +20,7 @@ import {
   getCards,
   getHealth,
   getMatches,
+  getUpdates,
   likeCompany,
   onboard,
   unlikeCompany,
@@ -175,6 +177,7 @@ export default function App() {
   const [picked, setPicked] = useState([]);
   const [queue, setQueue] = useState([]);
   const [matches, setMatches] = useState([]);
+  const [updates, setUpdates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -270,6 +273,31 @@ export default function App() {
     };
   }, [ready, screen, userId]);
 
+  useEffect(() => {
+    if (!ready || screen !== "updates" || !userId) return undefined;
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    getUpdates(userId)
+      .then((data) => {
+        if (!cancelled) setUpdates(data.updates || []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err.status === 404) {
+          forgetUser("That session was not found. Pick your interests again.");
+        } else {
+          setError(err.message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, screen, userId]);
+
   const current = queue[0];
 
   useEffect(() => {
@@ -294,6 +322,7 @@ export default function App() {
     setUserId("");
     setQueue([]);
     setMatches([]);
+    setUpdates([]);
     setPicked([]);
     setScreen("onboarding");
     setError(message || "");
@@ -393,6 +422,7 @@ export default function App() {
             <View style={styles.nav}>
               <Button title="Swipe" onPress={() => setScreen("swipe")} />
               <Button title="Matches" onPress={() => setScreen("matches")} />
+              <Button title="Updates" onPress={() => setScreen("updates")} />
               <Button title="Start over" onPress={askReset} />
             </View>
           ) : null}
@@ -466,6 +496,45 @@ export default function App() {
               ))}
             </View>
           ) : null}
+
+          {ready && screen === "updates" ? (
+            <View>
+              <Text style={styles.heading}>Updates</Text>
+              {loading ? <Text>Loading updates...</Text> : null}
+              {!loading && updates.length === 0 ? (
+                <Text>Like a few stocks and their daily updates will show up here.</Text>
+              ) : null}
+              {updates.map((update) => {
+                const lines = Array.isArray(update.lines) ? update.lines : [];
+                const newsUrl = typeof update.news_url === "string" && update.news_url ? update.news_url : null;
+                return (
+                  <View style={styles.card} key={update.ticker}>
+                    <Text style={styles.company}>{update.ticker}</Text>
+                    {lines.map((line, index) => {
+                      const linked = Boolean(newsUrl) && index === lines.length - 1;
+                      if (linked) {
+                        return (
+                          <Pressable
+                            key={`${update.ticker}-${index}`}
+                            onPress={() => {
+                              Linking.openURL(newsUrl).catch(() => {
+                                setError("Could not open that link.");
+                              });
+                            }}
+                          >
+                            <Text style={[styles.row, styles.link]}>{line}</Text>
+                          </Pressable>
+                        );
+                      }
+                      return (
+                        <Text style={styles.row} key={`${update.ticker}-${index}`}>{line}</Text>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -524,6 +593,9 @@ const styles = StyleSheet.create({
   },
   row: {
     marginVertical: 8,
+  },
+  link: {
+    textDecorationLine: "underline",
   },
   bold: {
     fontWeight: "700",
