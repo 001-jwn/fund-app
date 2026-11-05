@@ -21,6 +21,7 @@ import {
   getMatches,
   likeCompany,
   onboard,
+  unlikeCompany,
 } from "./api";
 import { becauseLikedText, nextQueueAfterLike, priceLine } from "./cardText";
 
@@ -178,6 +179,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [finnhub, setFinnhub] = useState("off");
+  const [unliking, setUnliking] = useState("");
   const swipeLock = useRef(false);
 
   useEffect(() => {
@@ -295,6 +297,20 @@ export default function App() {
     setPicked([]);
     setScreen("onboarding");
     setError(message || "");
+  }
+
+  async function unlikeMatch(ticker) {
+    if (!ticker || unliking) return;
+    setUnliking(ticker);
+    setError("");
+    try {
+      await unlikeCompany(userId, ticker);
+      setMatches((prev) => prev.filter((match) => match.ticker !== ticker));
+    } catch (err) {
+      setError(err.message || "Could not unlike that company.");
+    } finally {
+      setUnliking("");
+    }
   }
 
   function toggleInterest(id) {
@@ -441,6 +457,11 @@ export default function App() {
               {matches.map((match) => (
                 <View style={styles.card} key={match.ticker}>
                   <CompanyFacts card={match} showNews={false} />
+                  <Button
+                    title="Unlike"
+                    onPress={() => unlikeMatch(match.ticker)}
+                    disabled={unliking === match.ticker}
+                  />
                 </View>
               ))}
             </View>

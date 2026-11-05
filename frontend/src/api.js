@@ -54,6 +54,13 @@ export function likeCompany(userId, ticker) {
   });
 }
 
+export function unlikeCompany(userId, ticker) {
+  return request("/unlike", {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId, ticker }),
+  });
+}
+
 export function dislikeCompany(userId, ticker) {
   return request("/dislike", {
     method: "POST",
