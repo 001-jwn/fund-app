@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
 from app.models import Company
@@ -15,8 +16,15 @@ _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
 
 
 def build_update(company: Company) -> dict | None:
-    """One liked company, or None when there is nothing real to say."""
-    name = (liked_display_name(company) or "").strip()
+    """One liked company, or None when there is nothing real to say.
+
+    A bad cached number or timestamp skips that line. It does not raise,
+    so the next ticker can still be shown.
+    """
+    try:
+        name = (liked_display_name(company) or "").strip()
+    except (TypeError, ValueError):
+        return None
     lines: list[str] = []
     price_line = _price_line(company, name)
     if price_line:
@@ -31,22 +39,25 @@ def build_update(company: Company) -> dict | None:
     return {"ticker": company.ticker, "lines": lines, "news_url": news_url}
 
 
+def _finite_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _price_line(company: Company, name: str) -> str | None:
-    if not name or company.latest_quote_at is None:
+    if not name:
         return None
     price = company.current_price
     pct = company.price_change_percent
-    if price is None or pct is None:
+    if not _finite_number(price) or price <= 0 or not _finite_number(pct):
         return None
-    if isinstance(price, bool) or not isinstance(price, (int, float)) or price <= 0:
+    try:
+        quote_date = _new_york_day(company.latest_quote_at)
+        if quote_date is None:
+            return None
+        rounded = Decimal(str(pct)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+        price_text = f"{float(price):.2f}"
+    except (InvalidOperation, ValueError, OverflowError, OSError, TypeError):
         return None
-    if isinstance(pct, bool) or not isinstance(pct, (int, float)):
-        return None
-    quote_date = _new_york_day(company.latest_quote_at)
-    if quote_date is None:
-        return None
-    rounded = Decimal(str(pct)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
-    price_text = f"{float(price):.2f}"
     if rounded == 0:
         return f"{name} is about flat (as of {quote_date}), at US${price_text}."
     shown = f"{abs(rounded):.1f}"
@@ -82,13 +93,18 @@ def _real_headline(value: str | None) -> str | None:
     return value
 
 
-def _new_york_day(quote_at: datetime) -> str | None:
+def _new_york_day(quote_at: datetime | None) -> str | None:
     """Calendar day of a naive UTC quote timestamp in America/New_York."""
-    if quote_at.tzinfo is not None:
-        aware = quote_at.astimezone(timezone.utc)
-    else:
-        aware = quote_at.replace(tzinfo=timezone.utc)
-    local = aware.astimezone(_NEW_YORK)
+    if not isinstance(quote_at, datetime):
+        return None
+    try:
+        if quote_at.tzinfo is not None:
+            aware = quote_at.astimezone(timezone.utc)
+        else:
+            aware = quote_at.replace(tzinfo=timezone.utc)
+        local = aware.astimezone(_NEW_YORK)
+    except (OverflowError, OSError, ValueError, TypeError):
+        return None
     # Unix 0 is 1969-12-31 in New York. That is not a quote date.
     if local.year < 1971:
         return None

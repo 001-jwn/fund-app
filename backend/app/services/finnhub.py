@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import time
 import urllib.error
@@ -292,13 +293,24 @@ class FinnhubClient:
         raise RuntimeError(f"Finnhub request failed after retries: {endpoint}")
 
 
+def _finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _price_from_quote(quote: dict[str, Any]) -> tuple[float | None, float | None]:
-    """Finnhub uses 0 for 'no price'. Do not turn that into a fake price."""
+    """Finnhub uses 0 for 'no price'. Do not turn that into a fake price.
+
+    A non-finite price or percent is unusable too. Returning no price tells
+    the caller to leave the last good quote untouched.
+    """
     raw = quote.get("c")
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+    if not _finite_number(raw) or raw <= 0:
         return None, None
     pct_raw = quote.get("dp")
-    pct = float(pct_raw) if isinstance(pct_raw, (int, float)) and not isinstance(pct_raw, bool) else None
-    return float(raw), pct
+    if pct_raw is None:
+        return float(raw), None
+    if not _finite_number(pct_raw):
+        return None, None
+    return float(raw), float(pct_raw)
 
 

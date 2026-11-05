@@ -14,6 +14,7 @@ There is no ranking score beyond recency.
 from __future__ import annotations
 
 import json
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -123,8 +124,9 @@ def select_company_news(articles: list, ticker: str) -> SelectedNews | None:
             continue
         if _reject_reason(article, ticker) is not None:
             continue
-        when = article.get("datetime")
-        stamp = float(when) if isinstance(when, (int, float)) and not isinstance(when, bool) else 0.0
+        stamp = _usable_unix(article.get("datetime"))
+        if stamp is None or _iso_from_unix(stamp) is None:
+            continue
         candidates.append((stamp, article))
     if not candidates:
         return None
@@ -338,10 +340,23 @@ def _optional_text(value) -> str | None:
     return text or None
 
 
-def _iso_from_unix(value) -> str | None:
+def _usable_unix(value) -> float | None:
+    """A real unix time. Zero and negative values are not dates."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return time.strftime("%Y-%m-%d", time.gmtime(value))
+    if not math.isfinite(value) or value <= 0:
+        return None
+    return float(value)
+
+
+def _iso_from_unix(value) -> str | None:
+    stamp = _usable_unix(value)
+    if stamp is None:
+        return None
+    try:
+        return time.strftime("%Y-%m-%d", time.gmtime(stamp))
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def _parse_iso_date(value: str | None) -> datetime | None:

@@ -28,10 +28,16 @@ def get_updates(user_id: str = Query(...), db: Session = Depends(get_db)) -> Upd
 
     updates: list[UpdateOut] = []
     for match in rows:
-        company = db.get(Company, match.ticker)
+        try:
+            company = db.get(Company, match.ticker)
+        except (ArithmeticError, ValueError, TypeError, OverflowError):
+            continue
         if company is None:
             continue
-        item = build_update(company)
+        try:
+            item = build_update(company)
+        except (ArithmeticError, ValueError, TypeError, OverflowError, OSError):
+            continue
         if item is None:
             continue
         updates.append(UpdateOut(**item))

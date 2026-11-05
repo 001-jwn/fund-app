@@ -12,6 +12,7 @@ until that cache entry expires. Calls stay about 1.1 seconds apart.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 from datetime import date, datetime, timedelta, timezone
@@ -109,11 +110,16 @@ def _refresh_phase(ticker: str, phase: str) -> None:
 
 
 def _quote_at(quote: dict) -> datetime | None:
-    """Finnhub quote `t` is unix seconds. 0 means the quote is unavailable."""
+    """Finnhub quote `t` is unix seconds. Missing, zero, or negative is unusable."""
     raw = quote.get("t")
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
         return None
-    return datetime.fromtimestamp(float(raw), tz=timezone.utc).replace(tzinfo=None)
+    if not math.isfinite(raw) or raw <= 0:
+        return None
+    try:
+        return datetime.fromtimestamp(float(raw), tz=timezone.utc).replace(tzinfo=None)
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def _store_quote(
@@ -122,15 +128,16 @@ def _store_quote(
     pct: float | None,
     quote_at: datetime | None,
 ) -> None:
-    if price is None:
+    # Price, change, and timestamp are one quote. A missing timestamp is as
+    # unusable as c == 0: leave the last valid cache row alone.
+    if price is None or quote_at is None:
+        return
+    if pct is not None and (isinstance(pct, bool) or not isinstance(pct, (int, float)) or not math.isfinite(pct)):
         return
 
     def apply(company: Company) -> bool:
         company.current_price = float(price)
-        company.price_change_percent = (
-            float(pct) if isinstance(pct, (int, float)) and not isinstance(pct, bool) else None
-        )
-        # A missing or zero timestamp must not become 1969-12-31.
+        company.price_change_percent = float(pct) if pct is not None else None
         company.latest_quote_at = quote_at
         return True
 

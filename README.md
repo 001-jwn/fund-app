@@ -530,7 +530,7 @@ Each company card shows one news headline. A story is kept only when it passes e
 
 The price line comes first, then the news line. A line is left out when a piece of it is missing. A stock with neither line is left out of the list. If you have not liked anything, the list is empty. An unknown user gets a 404.
 
-The name is the company's short name, or the full company name when the short name is blank. The percent is the absolute change to one decimal. After that rounding, 0.0 is "about flat." The price has two decimals. A missing price, a missing percent, a missing quote time, or a price of 0 skips the price line. The time 0 is not a real quote, so it is never shown as Dec 31, 1969, and the price is never shown as US$0.00. The quote date is that quote's own timestamp in New York, written like Nov 3. The word "today" is not used.
+The name is the company's short name, or the full company name when the short name is blank. The percent is the absolute change to one decimal. After that rounding, 0.0 is "about flat." The price has two decimals. A missing price, a missing percent, a missing quote time, or a price of 0 skips the price line. A quote whose time is missing, zero, negative, or not a real number is ignored, and the last good price, change, and time stay together. The time 0 is not a real quote, so it is never shown as Dec 31, 1969, and the price is never shown as US$0.00. A stored price or percent that is not a real number is skipped too, and the other stocks are still listed. The quote date is that quote's own timestamp in New York, written like Nov 3. The word "today" is not used.
 
 The news line uses the headline already chosen for the card. "No recent news about this company yet." is not a headline. The news date is the cached news date, written like Nov 3. `news_url` is null when there is no news line, or when the cached article has no URL.
 
@@ -556,4 +556,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `54 passed`.
+The last line should include `58 passed`.

@@ -517,6 +517,42 @@ def test_no_passing_story_keeps_the_empty_news_message():
     assert NO_RECENT_NEWS_MESSAGE == "No recent news about this company yet."
 
 
+def test_unusable_news_timestamps_are_not_turned_into_jan_1():
+    from app.services.news import _iso_from_unix
+
+    assert _iso_from_unix(0) is None
+    assert _iso_from_unix(-1) is None
+    assert _iso_from_unix(-0.5) is None
+    assert _iso_from_unix(None) is None
+    assert _iso_from_unix("0") is None
+    assert _iso_from_unix("yesterday") is None
+    assert _iso_from_unix(True) is None
+    assert _iso_from_unix(float("nan")) is None
+    assert _iso_from_unix(float("inf")) is None
+    assert _iso_from_unix(float("-inf")) is None
+
+    story = {
+        "headline": "NVIDIA ships a new chip",
+        "summary": "A short summary of the news.",
+        "source": "Example Wire",
+        "url": "https://example.com/nvda-news",
+    }
+    for bad in (0, -5, None, "0", "nope", True, float("nan"), float("inf")):
+        assert select_company_news([{**story, "datetime": bad}], "NVDA") is None
+
+    picked = select_company_news(
+        [
+            {**story, "datetime": 0},
+            {**story, "headline": "NVIDIA ships a newer chip", "datetime": 1793577600},
+        ],
+        "NVDA",
+    )
+    assert picked is not None
+    assert picked.news_date == "2026-11-02"
+    assert picked.headline == "NVIDIA ships a newer chip"
+    assert "1970" not in picked.news_date
+
+
 def test_date_labels_use_the_card_copy():
     assert format_news_date_label("2026-11-02") == "News from Nov 2"
     assert format_quarter_label("2026-09-30") == "Last quarter (ended Sep 30, 2026)"

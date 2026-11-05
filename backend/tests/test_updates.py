@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sqlite3
 from datetime import datetime, timezone
 
@@ -346,8 +347,10 @@ def test_refresh_persists_quote_time_source_and_url(client, monkeypatch, tmp_pat
     live_mod.refresh_passes(["NVDA"])
     session = SessionLocal()
     stored = session.get(Company, "NVDA")
-    assert stored.current_price == 15.0
-    assert stored.latest_quote_at is None
+    # t == 0 is not a quote. Price, change, and timestamp stay together.
+    assert stored.current_price == 210.5
+    assert stored.price_change_percent == 1.26
+    assert stored.latest_quote_at == QUOTE_BEFORE_MIDNIGHT
     session.close()
 
     def zero_price(_self, symbol):
@@ -359,8 +362,9 @@ def test_refresh_persists_quote_time_source_and_url(client, monkeypatch, tmp_pat
     session = SessionLocal()
     stored = session.get(Company, "NVDA")
     # c == 0 is not a price, so the previous row is left alone.
-    assert stored.current_price == 15.0
-    assert stored.latest_quote_at is None
+    assert stored.current_price == 210.5
+    assert stored.price_change_percent == 1.26
+    assert stored.latest_quote_at == QUOTE_BEFORE_MIDNIGHT
     session.close()
 
     def no_story(_self, symbol, _news_from, _news_to):
@@ -420,3 +424,216 @@ def test_startup_adds_update_columns_to_an_old_database(tmp_path, monkeypatch):
     assert names.count("latest_news_source") == 1
     assert names.count("latest_news_url") == 1
     assert names.count("short_name") == 1
+
+
+def _refresh_quote(monkeypatch, live_mod, ticker, quote):
+    def fake_quote(_self, symbol):
+        assert symbol == ticker
+        return quote
+
+    def fake_news(_self, symbol, _news_from, _news_to):
+        return []
+
+    def fake_profile(_self, symbol):
+        return {}
+
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", fake_quote)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", fake_news)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", fake_profile)
+    live_mod._client = None
+    live_mod.refresh_passes([ticker])
+
+
+def _stored(ticker):
+    from app.db import SessionLocal
+    from app.models import Company
+
+    session = SessionLocal()
+    company = session.get(Company, ticker)
+    assert company is not None
+    snapshot = (
+        company.current_price,
+        company.price_change_percent,
+        company.latest_quote_at,
+        company.latest_news_headline,
+        company.latest_news_date,
+    )
+    session.close()
+    return snapshot
+
+
+def test_invalid_quote_timestamp_preserves_price_change_and_time(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("FINNHUB_API_KEY", "dummy-key")
+    monkeypatch.setenv("FUN_D_FINNHUB_LIVE", "1")
+
+    from app.services import live as live_mod
+
+    monkeypatch.setattr(live_mod, "DEFAULT_CACHE_DIR", tmp_path)
+    live_mod._client = None
+    # QA repro: a real quote, then a later quote whose timestamp is 0.
+    valid_t = 1762230600
+    valid_at = datetime.fromtimestamp(valid_t, tz=timezone.utc).replace(tzinfo=None)
+    _refresh_quote(monkeypatch, live_mod, "NVDA", {"c": 210.5, "dp": 1.26, "t": valid_t})
+    assert _stored("NVDA")[:3] == (210.5, 1.26, valid_at)
+
+    bad_timestamps = [
+        {"c": 15.0, "dp": 1.0},
+        {"c": 15.0, "dp": 1.0, "t": None},
+        {"c": 15.0, "dp": 1.0, "t": 0},
+        {"c": 15.0, "dp": 1.0, "t": -5},
+        {"c": 15.0, "dp": 1.0, "t": "1762230600"},
+        {"c": 15.0, "dp": 1.0, "t": True},
+        {"c": 15.0, "dp": 1.0, "t": float("nan")},
+        {"c": 15.0, "dp": 1.0, "t": float("inf")},
+    ]
+    for quote in bad_timestamps:
+        _refresh_quote(monkeypatch, live_mod, "NVDA", quote)
+        assert _stored("NVDA")[:3] == (210.5, 1.26, valid_at)
+
+    # The same bad payloads must not create a quote on an empty row.
+    assert _stored("SONY")[0] is None
+    assert _stored("SONY")[2] is None
+    for quote in bad_timestamps:
+        _refresh_quote(monkeypatch, live_mod, "SONY", quote)
+        assert _stored("SONY")[0] is None
+        assert _stored("SONY")[1] is None
+        assert _stored("SONY")[2] is None
+
+    user_id = _onboard(client, ["gaming"])
+    assert client.post("/like", json={"user_id": user_id, "ticker": "NVDA"}).status_code == 200
+    assert client.post("/like", json={"user_id": user_id, "ticker": "SONY"}).status_code == 200
+    matches = client.get("/matches", params={"user_id": user_id})
+    nvidia = next(item for item in matches.json()["matches"] if item["ticker"] == "NVDA")
+    assert nvidia["current_price"] == 210.5
+    assert nvidia["price_change_percent"] == 1.26
+    updates = _updates(client, user_id)
+    assert [item["ticker"] for item in updates] == ["NVDA"]
+    assert updates[0]["lines"][0].startswith("NVIDIA is up 1.3%")
+    assert "US$15.00" not in updates[0]["lines"][0]
+
+
+def test_zero_news_timestamp_does_not_invent_jan_1(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("FINNHUB_API_KEY", "dummy-key")
+    monkeypatch.setenv("FUN_D_FINNHUB_LIVE", "1")
+
+    from app.services import live as live_mod
+
+    monkeypatch.setattr(live_mod, "DEFAULT_CACHE_DIR", tmp_path)
+    live_mod._client = None
+    _refresh_quote(
+        monkeypatch,
+        live_mod,
+        "NVDA",
+        {"c": 210.5, "dp": 1.26, "t": int(QUOTE_BEFORE_MIDNIGHT.replace(tzinfo=timezone.utc).timestamp())},
+    )
+
+    def fake_quote(_self, symbol):
+        return {"c": 210.5, "dp": 1.26, "t": int(QUOTE_BEFORE_MIDNIGHT.replace(tzinfo=timezone.utc).timestamp())}
+
+    def fake_news(_self, symbol, _news_from, _news_to):
+        return [{
+            "headline": "NVIDIA ships a new chip",
+            "summary": "A short summary of the news.",
+            "datetime": 0,
+            "source": "Example Wire",
+            "url": "https://example.com/nvda-news",
+        }]
+
+    def fake_profile(_self, symbol):
+        return {}
+
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", fake_quote)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", fake_news)
+    monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", fake_profile)
+    live_mod._client = None
+    live_mod.refresh_passes(["NVDA"])
+
+    price, pct, quote_at, headline, news_date = _stored("NVDA")
+    assert price == 210.5
+    assert headline == "__no_recent_company_news__"
+    assert news_date is None
+    assert news_date != "1970-01-01"
+
+    user_id = _onboard(client, ["gaming"])
+    assert client.post("/like", json={"user_id": user_id, "ticker": "NVDA"}).status_code == 200
+    updates = _updates(client, user_id)
+    assert updates[0]["lines"] == ["NVIDIA is up 1.3% (as of Nov 3), at US$210.50."]
+    assert updates[0]["news_url"] is None
+    assert "Jan 1" not in updates[0]["lines"][0]
+
+
+def test_nonfinite_quotes_are_skipped_without_failing_other_tickers(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("FINNHUB_API_KEY", "dummy-key")
+    monkeypatch.setenv("FUN_D_FINNHUB_LIVE", "1")
+
+    from app.services import live as live_mod
+
+    monkeypatch.setattr(live_mod, "DEFAULT_CACHE_DIR", tmp_path)
+    live_mod._client = None
+    valid_t = int(QUOTE_BEFORE_MIDNIGHT.replace(tzinfo=timezone.utc).timestamp())
+    _refresh_quote(monkeypatch, live_mod, "NVDA", {"c": 210.5, "dp": 1.26, "t": valid_t})
+
+    for quote in (
+        {"c": math.inf, "dp": 1.26, "t": valid_t},
+        {"c": -math.inf, "dp": 1.26, "t": valid_t},
+        {"c": math.nan, "dp": 1.26, "t": valid_t},
+        {"c": 15.0, "dp": math.inf, "t": valid_t},
+        {"c": 15.0, "dp": -math.inf, "t": valid_t},
+        {"c": 15.0, "dp": math.nan, "t": valid_t},
+    ):
+        _refresh_quote(monkeypatch, live_mod, "NVDA", quote)
+        assert _stored("NVDA")[:3] == (210.5, 1.26, QUOTE_BEFORE_MIDNIGHT)
+
+    assert _stored("AMD")[0] is None
+    _refresh_quote(monkeypatch, live_mod, "AMD", {"c": math.inf, "dp": math.nan, "t": valid_t})
+    assert _stored("AMD")[0] is None
+    assert _stored("AMD")[2] is None
+
+    _set_company(
+        "AMD",
+        current_price=math.inf,
+        price_change_percent=1.26,
+        latest_quote_at=QUOTE_BEFORE_MIDNIGHT,
+        latest_news_headline="AMD ships a new chip",
+        latest_news_date="2026-11-03",
+        latest_news_source="Example Wire",
+        latest_news_url="https://example.com/amd-news",
+    )
+    _set_company(
+        "SONY",
+        current_price=100.0,
+        price_change_percent=math.nan,
+        latest_quote_at=QUOTE_BEFORE_MIDNIGHT,
+        latest_news_headline="Sony ships a new headset",
+        latest_news_date="2026-11-03",
+        latest_news_source=None,
+        latest_news_url=None,
+    )
+    user_id = _onboard(client, ["gaming"])
+    for ticker in ("NVDA", "AMD", "SONY", "RBLX"):
+        assert client.post("/like", json={"user_id": user_id, "ticker": ticker}).status_code == 200
+
+    # A garbage timestamp is written after the like, so loading that one row
+    # must not hide the other liked stocks.
+    from app.db import ENGINE
+
+    assert ENGINE is not None
+    with ENGINE.begin() as conn:
+        conn.exec_driver_sql(
+            "UPDATE companies SET latest_quote_at = 'not-a-date', current_price = 10, "
+            "price_change_percent = 1 WHERE ticker = 'RBLX'"
+        )
+
+    updates = _updates(client, user_id)
+    by_ticker = {item["ticker"]: item for item in updates}
+    assert "US$inf" not in str(updates)
+    assert "nan" not in str(updates).lower()
+    assert by_ticker["NVDA"]["lines"] == ["NVIDIA is up 1.3% (as of Nov 3), at US$210.50."]
+    assert by_ticker["AMD"]["lines"] == [
+        'In the news for AMD: "AMD ships a new chip" (Example Wire, Nov 3).'
+    ]
+    assert "US$" not in by_ticker["AMD"]["lines"][0]
+    assert by_ticker["SONY"]["lines"] == [
+        'In the news for Sony: "Sony ships a new headset" (Nov 3).'
+    ]
+    assert "RBLX" not in by_ticker
