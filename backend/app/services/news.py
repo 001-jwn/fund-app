@@ -3,10 +3,12 @@
 Rules live in backend/app/seed/news_match_rules.json. An article counts only
 when an alias appears in the HEADLINE as a whole word. Tickers in
 no_bare_ticker never match as a bare word; $TICKER and (TICKER) still count.
-Roundups, multi-company lists, passing-mention clickbait, trailing mentions,
-and articles with no usable summary are rejected. Finnhub's `related` field
-is not trusted. The most recent surviving article wins. There is no ranking
-score beyond recency.
+Roundups, multi-company lists, passing-mention clickbait, advice headlines,
+trailing mentions, and articles with no usable summary are rejected. A
+headline that names another company is rejected too, unless that name is a
+whole word inside this ticker's own aliases or company name. Finnhub's
+`related` field is not trusted. The most recent surviving article wins.
+There is no ranking score beyond recency.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ NO_RECENT_NEWS_SENTINEL = "__no_recent_company_news__"
 NO_RECENT_NEWS_MESSAGE = "No recent news about this company yet."
 
 RULES_PATH = Path(__file__).resolve().parents[1] / "seed" / "news_match_rules.json"
+COMPANIES_PATH = RULES_PATH.parent / "seed_companies.json"
 
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 _DEFAULT_MIN_SUMMARY_CHARS = 20
@@ -35,7 +38,9 @@ _boilerplate_cache: list[re.Pattern[str]] | None = None
 _roundup_cache: list[re.Pattern[str]] | None = None
 _passing_cache: list[re.Pattern[str]] | None = None
 _question_cache: list[re.Pattern[str]] | None = None
+_advice_cache: list[re.Pattern[str]] | None = None
 _multi_list_cache: re.Pattern[str] | None = None
+_company_name_cache: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -47,7 +52,7 @@ class SelectedNews:
 
 def load_rules() -> dict:
     global _rules_cache, _boilerplate_cache, _roundup_cache, _passing_cache
-    global _question_cache, _multi_list_cache
+    global _question_cache, _advice_cache, _multi_list_cache
     if _rules_cache is None:
         _rules_cache = json.loads(RULES_PATH.read_text(encoding="utf-8"))
         _boilerplate_cache = [
@@ -64,6 +69,11 @@ def load_rules() -> dict:
         _question_cache = [
             re.compile(pattern)
             for pattern in _rules_cache.get("question_clickbait_headline_patterns") or []
+        ]
+        _advice_cache = [
+            re.compile(r"(?<!\w)" + re.escape(phrase.strip()) + r"(?!\w)", re.IGNORECASE)
+            for phrase in _rules_cache.get("advice_headline_patterns") or []
+            if isinstance(phrase, str) and phrase.strip()
         ]
         multi = _rules_cache.get("multi_company_list_headline_pattern")
         _multi_list_cache = re.compile(multi) if multi else None
@@ -148,6 +158,9 @@ def _reject_reason(article: dict, ticker: str) -> str | None:
     for pattern in _passing_cache or []:
         if pattern.search(headline):
             return "passing_mention"
+    for pattern in _advice_cache or []:
+        if pattern.search(headline):
+            return "advice_headline"
     if _multi_list_cache is not None and _multi_list_cache.search(headline):
         return "multi_company_list"
 
@@ -211,10 +224,47 @@ def _alias_span(text: str, ticker: str) -> tuple[int, int, str] | None:
     return best
 
 
+def _company_name(ticker: str) -> str:
+    global _company_name_cache
+    if _company_name_cache is None:
+        payload = json.loads(COMPANIES_PATH.read_text(encoding="utf-8"))
+        names: dict[str, str] = {}
+        for company in payload.get("companies") or []:
+            symbol = str(company.get("ticker") or "").strip().upper()
+            name = company.get("company_name")
+            if symbol and isinstance(name, str) and name.strip():
+                names[symbol] = name.strip()
+        _company_name_cache = names
+    return _company_name_cache.get(ticker, "")
+
+
+def _own_labels(ticker: str, rules: dict) -> list[str]:
+    """Aliases plus the seed company name. The ticker itself counts too."""
+    labels: list[str] = []
+    for alias in (rules.get("aliases") or {}).get(ticker) or []:
+        cleaned = alias.strip()
+        if cleaned and cleaned not in labels:
+            labels.append(cleaned)
+    company = _company_name(ticker)
+    if company and company not in labels:
+        labels.append(company)
+    if ticker and ticker not in labels:
+        labels.append(ticker)
+    return labels
+
+
+def _part_of_own_name(name: str, labels: list[str]) -> bool:
+    """True when name is a whole word inside an own alias or company name.
+
+    Booking is on the other-names list, and it is also a word inside
+    Booking Holdings, so BKNG must not treat its own name as a rival.
+    """
+    return any(_whole_word(label, name) for label in labels)
+
+
 def _other_notable_names(headline: str, ticker: str) -> list[str]:
     rules = load_rules()
-    mine = {a.strip().lower() for a in (rules.get("aliases") or {}).get(ticker) or []}
-    mine.add(ticker.lower())
+    own_labels = _own_labels(ticker, rules)
     candidates: set[str] = set(rules.get("notable_other_names") or [])
     for other_ticker, aliases in (rules.get("aliases") or {}).items():
         if other_ticker == ticker:
@@ -225,7 +275,7 @@ def _other_notable_names(headline: str, ticker: str) -> list[str]:
                 candidates.add(cleaned)
     found: list[str] = []
     for name in sorted(candidates, key=len, reverse=True):
-        if name.lower() in mine:
+        if _part_of_own_name(name, own_labels):
             continue
         if any(name.lower() == prior.lower() for prior in found):
             continue

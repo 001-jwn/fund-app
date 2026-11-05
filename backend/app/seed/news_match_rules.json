@@ -1,5 +1,5 @@
 {
-  "notes": "F1 pick rule (2026-11-03). Keep a story only if an alias appears in the HEADLINE (summary-only is excluded). Tickers in no_bare_ticker never match as a bare word; $TICKER and (TICKER) still count. Reject roundups, multi-company lists, passing-mention clickbait, trailing company mentions, and articles with no usable summary. Among survivors, pick the most recent. Finnhub related is never trusted.",
+  "notes": "F1 pick rule (2026-11-03), tightened in F2b. Keep a story only if an alias appears in the HEADLINE (summary-only is excluded). Tickers in no_bare_ticker never match as a bare word; $TICKER and (TICKER) still count. Reject roundups, multi-company lists, passing-mention clickbait, advice headlines, trailing company mentions, and articles with no usable summary. Any other notable name in the headline rejects the story, except a name that is a whole word inside this ticker's own aliases or company name. Among survivors, pick the most recent. Finnhub related is never trusted.",
   "no_bare_ticker": ["F", "U", "GM", "TM", "HLT", "MAR", "DAL", "LUV", "AMD", "SPOT", "RACE", "SONY", "UBER", "ABNB"],
   "aliases": {
     "NVDA": ["Nvidia", "NVDA"],
@@ -74,6 +74,28 @@
     "(?i)^why\\s+is\\s+.+\\s+stock\\s+(?:up|down|moving)",
     "(?i)^are\\s+you\\s+sure\\s+you\\s+understand\\b"
   ],
+  "advice_headline_patterns": [
+    "buy",
+    "buying",
+    "sell",
+    "selling",
+    "take profit",
+    "take profits",
+    "should you",
+    "stock to own",
+    "stocks to own",
+    "maintains",
+    "reiterates",
+    "price target",
+    "upgrade",
+    "upgrades",
+    "downgrade",
+    "downgrades",
+    "outperform",
+    "underperform",
+    "overweight",
+    "underweight"
+  ],
   "multi_company_list_headline_pattern": "(?i)(?:[A-Z][\\w.&'-]+(?:,\\s+[A-Z][\\w.&'-]+){1,},?\\s+(?:and|&)\\s+[A-Z][\\w.&'-]+)|(?:[A-Z]{2,5}(?:,\\s+[A-Z]{2,5}){2,})",
   "notable_other_names": [
     "Nvidia", "Microsoft", "Apple", "Amazon", "Google", "Alphabet", "Meta", "Tesla", "Oracle",
@@ -83,7 +105,7 @@
     "Grab", "Reddit", "Dell", "SoftBank", "TSMC", "SK Hynix", "Amphenol", "Copart", "Fiserv",
     "Booking"
   ],
-  "max_other_notable_names_in_headline": 1,
+  "max_other_notable_names_in_headline": 0,
   "trailing_mention_min_start": 40,
   "trailing_mention_max_frac": 0.5,
   "reject_when_other_company_leads_headline": true,
