@@ -108,10 +108,128 @@ def _quote_at(days_ago, hour_utc=18):
     return datetime(moment.year, moment.month, moment.day, hour_utc)
 
 
+def _weekday_label(day):
+    weekdays = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    return f"{weekdays[day.weekday()]}, {months[day.month - 1]} {day.day}"
+
+
 def _et_label(when_naive_utc):
     aware = when_naive_utc.replace(tzinfo=timezone.utc).astimezone(NEW_YORK)
     months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     return f"{months[aware.month - 1]} {aware.day}"
+
+
+ADVICE_WORDS = (
+    "buy",
+    "sell",
+    "hold",
+    "soared",
+    "crashed",
+    "plunged",
+    "skyrocketed",
+    "tanked",
+    "time to",
+    "should you",
+    "don't miss",
+)
+
+
+def _no_advice(line: str) -> None:
+    lowered = line.lower()
+    for word in ADVICE_WORDS:
+        assert word not in lowered
+
+
+def test_rendered_lines_match_the_i3_templates(client):
+    """Lines from i3_alert_templates.md, written 2026-11-05."""
+    user_id = _onboard(client, ["gaming"])
+    _like(client, user_id, "NVDA")
+    _like(client, user_id, "AMD")
+    _like(client, user_id, "SONY")
+    first = _quote_at(12)
+    second = _quote_at(11)
+    today = NOW.astimezone(NEW_YORK).date()
+    tomorrow = today + timedelta(days=1)
+
+    _set_company("NVDA", current_price=10, price_change_percent=1, latest_quote_at=first)
+    _detect(user_id)
+    _set_company("NVDA", current_price=210.5, price_change_percent=6, latest_quote_at=second)
+    _detect(user_id)
+    price_line = _alerts(user_id)[0][2]
+    assert price_line == (
+        f"Big move: NVIDIA is up 6.0% (as of {_et_label(second)}), at US$210.50."
+    )
+    _no_advice(price_line)
+    assert "today" not in price_line and "tomorrow" not in price_line
+
+    _set_company("AMD", current_price=40, price_change_percent=-5, latest_quote_at=first)
+    _detect(user_id)
+    _set_company("AMD", current_price=38, price_change_percent=-5.5, latest_quote_at=second)
+    _detect(user_id)
+    down_line = [row[2] for row in _alerts(user_id) if row[2].startswith("Big move: AMD")][0]
+    assert down_line == (
+        f"Big move: AMD is down 5.5% (as of {_et_label(second)}), at US$38.00."
+    )
+    _no_advice(down_line)
+
+    _set_earnings("SONY", (today + timedelta(days=4)).isoformat())
+    _detect(user_id)
+    _set_earnings("SONY", tomorrow.isoformat(), "amc")
+    _detect(user_id)
+    earnings_line = [row[2] for row in _alerts(user_id) if row[2].startswith("Results coming")][0]
+    assert earnings_line == (
+        "Results coming: Sony is scheduled to share its latest quarterly results on "
+        f"{_weekday_label(tomorrow)}, after the market closes."
+    )
+    _no_advice(earnings_line)
+    assert "today" not in earnings_line and "tomorrow" not in earnings_line
+
+    _set_earnings("SONY", today.isoformat(), "dmh")
+    _detect(user_id)
+    plain = [row[2] for row in _alerts(user_id) if _weekday_label(today) in row[2]][0]
+    assert plain == (
+        "Results coming: Sony is scheduled to share its latest quarterly results on "
+        f"{_weekday_label(today)}."
+    )
+    assert "market" not in plain
+
+    _set_company(
+        "NVDA",
+        latest_news_headline="NVIDIA guidance is raised",
+        latest_news_unix=(NOW - timedelta(hours=3)).timestamp(),
+        latest_news_id="guide-1",
+        latest_news_date="2026-11-08",
+        latest_news_source="Example Wire",
+        latest_news_url="https://example.com/guide",
+    )
+    _detect(user_id)
+    # The first qualifying news item is only a baseline.
+    _set_company(
+        "NVDA",
+        latest_news_headline="NVIDIA outlook stays steady",
+        latest_news_unix=(NOW - timedelta(hours=1)).timestamp(),
+        latest_news_id="outlook-1",
+        latest_news_date="2026-11-09",
+        latest_news_source="",
+    )
+    _detect(user_id)
+    news_lines = [row[2] for row in _alerts(user_id) if row[2].startswith("New for")]
+    assert news_lines == ['New for NVIDIA: "NVIDIA outlook stays steady" (Nov 9).']
+    _no_advice(news_lines[0])
+
+    _set_company("NVDA", short_name=" ", company_name=" ")
+    _set_company(
+        "NVDA",
+        latest_news_headline="NVIDIA results are posted",
+        latest_news_unix=(NOW - timedelta(hours=1)).timestamp(),
+        latest_news_id="blank-name",
+        latest_news_date="2026-11-09",
+        latest_news_source="Example Wire",
+    )
+    before = len(_alerts(user_id))
+    _detect(user_id)
+    assert len(_alerts(user_id)) == before
 
 
 def test_price_baseline_dedupe_directions_and_real_date(client):
@@ -204,14 +322,20 @@ def test_earnings_window_reschedule_and_hour(client):
     assert len(alerts) == 1
     assert alerts[0][0] == "earnings"
     assert alerts[0][1] == tomorrow.isoformat()
-    assert alerts[0][2] == "NVIDIA is scheduled to report earnings tomorrow."
+    assert alerts[0][2] == (
+        "Results coming: NVIDIA is scheduled to share its latest quarterly results on "
+        f"{_weekday_label(tomorrow)}."
+    )
+    assert "today" not in alerts[0][2]
+    assert "tomorrow" not in alerts[0][2]
     _detect(user_id)
     assert len(_alerts(user_id)) == 1
 
     _set_earnings("NVDA", today.isoformat(), "bmo")
     _detect(user_id)
     assert _alerts(user_id)[1][2] == (
-        "NVIDIA is scheduled to report earnings today (before market open)."
+        "Results coming: NVIDIA is scheduled to share its latest quarterly results on "
+        f"{_weekday_label(today)}, before the market opens."
     )
     _set_earnings("NVDA", today.isoformat(), "amc")
     _detect(user_id)
@@ -225,7 +349,7 @@ def test_earnings_window_reschedule_and_hour(client):
     amd = [row for row in _alerts(user_id) if "AMD" in row[2] or row[1] == tomorrow.isoformat()]
     # AMD's first in-window read is the baseline, so it does not emit.
     assert _baseline(user_id, "AMD", "earnings") == tomorrow.isoformat()
-    assert not any(row[2].startswith("AMD is scheduled") for row in _alerts(user_id))
+    assert not any(row[2].startswith("Results coming: AMD") for row in _alerts(user_id))
     assert amd is not None
 
 
@@ -294,11 +418,26 @@ def test_news_gates_terms_and_f2b_reject(client):
         latest_news_unix=exactly,
         latest_news_id="earn-24",
         latest_news_url="https://example.com/earn",
+        latest_news_date="2026-11-05",
+        latest_news_source="Example Wire",
     )
     _detect(user_id)
     assert len(_alerts(user_id)) == 1
     assert _alerts(user_id)[0][0] == "news"
-    assert _alerts(user_id)[0][2] == "News about NVIDIA: NVIDIA earnings are out"
+    assert _alerts(user_id)[0][2] == (
+        'New for NVIDIA: "NVIDIA earnings are out" (Example Wire, Nov 5).'
+    )
+    _detect(user_id)
+    assert len(_alerts(user_id)) == 1
+
+    _set_company(
+        "NVDA",
+        latest_news_headline="NVIDIA results are missing a date",
+        latest_news_unix=old,
+        latest_news_id="no-date",
+        latest_news_date=None,
+        latest_news_source="Example Wire",
+    )
     _detect(user_id)
     assert len(_alerts(user_id)) == 1
 
@@ -410,7 +549,7 @@ def test_updates_keeps_its_shape_and_seen_marks_alerts(client, monkeypatch):
     assert alert["kind"] == "price"
     assert alert["seen"] is False
     assert alert["url"] is None
-    assert "moved up" in alert["line"]
+    assert alert["line"].startswith("Big move: NVIDIA is up ")
     assert "today" not in alert["line"]
     assert isinstance(alert["id"], int)
     assert payload["updates"]

@@ -544,7 +544,7 @@ The news line uses the headline already chosen for the card. "No recent news abo
 
 A liked stock can also raise a short alert for a big price move, an earnings date, or a news headline. The first time the app sees valid data for that stock, it only remembers it. It does not alert yet. After that, a new move, a new earnings date, or a new matching headline is listed once.
 
-A price alert needs a real quote whose time is not in the future, and a change of at least 5 percent. The line names the date of that quote in New York. It does not call an older session "today." An earnings alert is only for a report scheduled today or tomorrow. If the calendar says before the open or after the close, the line says so. A news alert uses the same headline already chosen for the card, only when that story is less than a day old and the headline uses one of a fixed list of words such as earnings, guidance, or CEO.
+A price alert needs a real quote whose time is not in the future, and a change of at least 5 percent. The line names that quote's New York date, such as Nov 6, and never says "today." An earnings alert is only for a report date that is today or tomorrow in New York, but the line writes the weekday and date, such as Thu, Nov 6, and never says "today" or "tomorrow." It adds ", before the market opens" or ", after the market closes" only when the calendar hour is bmo or amc. A news alert uses the same headline already chosen for the card, only when that story is less than a day old and the headline uses one of a fixed list of words such as earnings, guidance, or CEO. If a fact the line needs is missing, that alert is left out.
 
 `GET /updates?user_id=` still returns `updates` as before. It also returns `alerts` (newest first, at most 50) and `unseen_count`. `POST /alerts/seen` with `{"user_id": "..."}` marks that person's alerts as seen and returns `{"unseen_count": 0}`. Marking them seen does not delete them, so the same event does not come back. Unlike does delete that stock's alerts, and a later like starts the memory over.
 
@@ -566,4 +566,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `65 passed`.
+The last line should include `66 passed`.

@@ -29,14 +29,18 @@ SKEW = timedelta(minutes=5)
 NEWS_MAX_AGE = timedelta(hours=24)
 NONE_KEY = "none"
 
-# Provisional copy. Content Writer replaces this dict later (I3).
+# I3 alert copy, written 2026-11-05. Swap this dict when the wording changes.
+# {when} and {source} may be empty. Every other placeholder is required.
 LINE_TEMPLATES = {
-    "price": "{name} moved {direction} {pct:.1f}% on {when} (last price US${price:.2f}).",
-    "earnings": "{name} is scheduled to report earnings {when}{hour}.",
-    "news": "News about {name}: {headline}",
+    "price_up": "Big move: {name} is up {pct}% (as of {quote_date}), at US${price}.",
+    "price_down": "Big move: {name} is down {pct}% (as of {quote_date}), at US${price}.",
+    "earnings": "Results coming: {name} is scheduled to share its latest quarterly results on {earnings_date}{when}.",
+    "news": 'New for {name}: "{headline}" ({source}, {date}).',
+    "news_no_source": 'New for {name}: "{headline}" ({date}).',
 }
 
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 _TERMS = (
     "earnings",
     "results",
@@ -99,20 +103,15 @@ def _consider_price(session: Session, user_id: str, company: Company, now: datet
     if not _past_baseline(session, user_id, company.ticker, "price", key):
         return
     assert key is not None and direction is not None
-    when = f"{_MONTHS[quote_date.month - 1]} {quote_date.day}"
+    line = _price_line(_name(company), direction, pct, quote_date, company.current_price)
+    if line is None:
+        return
     facts = {
         "dp": pct,
         "c": company.current_price,
         "quote_date_et": quote_date.isoformat(),
         "direction": direction,
     }
-    line = LINE_TEMPLATES["price"].format(
-        name=_name(company),
-        direction=direction,
-        pct=abs(pct),
-        when=when,
-        price=float(company.current_price),
-    )
     _emit(session, user_id, company.ticker, "price", key, facts, line)
 
 
@@ -132,13 +131,13 @@ def _consider_earnings(
     if not _past_baseline(session, user_id, company.ticker, "earnings", key):
         return
     assert report is not None
-    when = "today" if report == today_et else "tomorrow"
-    hour = _hour_clause(row.hour)
+    line = _earnings_line(_name(company), report, row.hour)
+    if line is None:
+        return
     facts = {"date": report.isoformat()}
     if row.hour:
         facts["hour"] = row.hour
-    line = LINE_TEMPLATES["earnings"].format(name=_name(company), when=when, hour=hour)
-    _emit(session, user_id, company.ticker, "earnings", key or report.isoformat(), facts, line)
+    _emit(session, user_id, company.ticker, "earnings", report.isoformat(), facts, line)
 
 
 def _consider_news(session: Session, user_id: str, company: Company, now: datetime) -> None:
@@ -155,13 +154,16 @@ def _consider_news(session: Session, user_id: str, company: Company, now: dateti
     key = fingerprint if passes_age and passes_term else None
     if not _past_baseline(session, user_id, company.ticker, "news", key):
         return
+    source = (company.latest_news_source or "").strip()
+    line = _news_line(_name(company), headline, company.latest_news_date, source)
+    if line is None:
+        return
     facts = {
         "headline": headline,
-        "source": company.latest_news_source,
+        "source": source or None,
         "date": company.latest_news_date,
         "url": (company.latest_news_url or "").strip() or None,
     }
-    line = LINE_TEMPLATES["news"].format(name=_name(company), headline=headline)
     _emit(session, user_id, company.ticker, "news", fingerprint, facts, line)
 
 
@@ -275,12 +277,52 @@ def _real_headline(value: str | None) -> str | None:
     return value
 
 
+def _price_line(name: str, direction: str, pct: float, quote_date, price) -> str | None:
+    if not name or quote_date is None or price is None or pct is None:
+        return None
+    template = LINE_TEMPLATES["price_up" if direction == "up" else "price_down"]
+    return template.format(
+        name=name,
+        pct=f"{abs(float(pct)):.1f}",
+        quote_date=f"{_MONTHS[quote_date.month - 1]} {quote_date.day}",
+        price=f"{float(price):.2f}",
+    )
+
+
+def _earnings_line(name: str, report, hour: str | None) -> str | None:
+    if not name or report is None:
+        return None
+    return LINE_TEMPLATES["earnings"].format(
+        name=name,
+        earnings_date=f"{_WEEKDAYS[report.weekday()]}, {_MONTHS[report.month - 1]} {report.day}",
+        when=_hour_clause(hour),
+    )
+
+
+def _news_line(name: str, headline: str, news_date: str | None, source: str) -> str | None:
+    shown_date = _month_day_from_iso(news_date)
+    if not name or not headline or not shown_date:
+        return None
+    if source:
+        return LINE_TEMPLATES["news"].format(
+            name=name, headline=headline, source=source, date=shown_date
+        )
+    return LINE_TEMPLATES["news_no_source"].format(name=name, headline=headline, date=shown_date)
+
+
+def _month_day_from_iso(value: str | None) -> str | None:
+    parsed = _parse_date(value)
+    if parsed is None:
+        return None
+    return f"{_MONTHS[parsed.month - 1]} {parsed.day}"
+
+
 def _hour_clause(hour: str | None) -> str:
     token = (hour or "").strip().lower()
     if token == "bmo":
-        return " (before market open)"
+        return ", before the market opens"
     if token == "amc":
-        return " (after market close)"
+        return ", after the market closes"
     return ""
 
 
@@ -295,7 +337,7 @@ def _parse_date(value: str | None):
 
 
 def _name(company: Company) -> str:
-    return (liked_display_name(company) or "").strip() or company.ticker
+    return (liked_display_name(company) or "").strip()
 
 
 def _finite(value: object) -> bool:
