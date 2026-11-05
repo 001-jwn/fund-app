@@ -6,7 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db, utcnow
-from app.models import Company, CompanyInterest, Dislike, Like, Match, User, UserInterest
+from app.models import (
+    Alert,
+    AlertBaseline,
+    Company,
+    CompanyInterest,
+    Dislike,
+    Like,
+    Match,
+    User,
+    UserInterest,
+)
 from app.schemas import SwipeIn, SwipeOut
 
 router = APIRouter()
@@ -93,5 +103,11 @@ def unlike(body: SwipeIn, db: Session = Depends(get_db)) -> SwipeOut:
     db.query(Match).filter(Match.user_id == body.user_id, Match.ticker == ticker).delete(
         synchronize_session=False
     )
+    db.query(Alert).filter(Alert.user_id == body.user_id, Alert.ticker == ticker).delete(
+        synchronize_session=False
+    )
+    db.query(AlertBaseline).filter(
+        AlertBaseline.user_id == body.user_id, AlertBaseline.ticker == ticker
+    ).delete(synchronize_session=False)
     db.commit()
     return SwipeOut(ok=True, user_id=body.user_id, ticker=ticker, matched=False)

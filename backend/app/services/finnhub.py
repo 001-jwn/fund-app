@@ -41,6 +41,7 @@ TTL_QUOTE = 5 * 60
 TTL_PROFILE = 7 * 24 * 60 * 60
 TTL_NEWS = 45 * 60
 TTL_EARNINGS = 7 * 24 * 60 * 60
+TTL_EARNINGS_CALENDAR = 12 * 60 * 60
 
 
 @dataclass
@@ -90,6 +91,15 @@ class FinnhubClient:
             {"symbol": symbol.upper(), "from": from_date, "to": to_date},
             ttl=TTL_NEWS,
         )
+
+    def get_earnings_calendar(self, symbol: str, from_date: str, to_date: str) -> dict[str, Any]:
+        """GET /calendar/earnings for one symbol. Disk TTL is 12 hours."""
+        payload = self._get(
+            "calendar/earnings",
+            {"symbol": symbol.upper(), "from": from_date, "to": to_date},
+            ttl=TTL_EARNINGS_CALENDAR,
+        )
+        return payload if isinstance(payload, dict) else {}
 
     def get_earnings(self, symbol: str, limit: int = 4) -> list[Any]:
         """GET /stock/earnings → fallback only, when the seed has no quarter date."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, utcnow
@@ -30,6 +30,9 @@ class Company(Base):
     latest_quote_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     latest_news_source: Mapped[str | None] = mapped_column(Text, nullable=True)
     latest_news_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Article id and source time for the news24h alert gate. Not shown on cards.
+    latest_news_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latest_news_unix: Mapped[float | None] = mapped_column(Float, nullable=True)
     quarterly_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_quarter_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
     logo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -81,3 +84,39 @@ class Match(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
     ticker: Mapped[str] = mapped_column(ForeignKey("companies.ticker"), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class EarningsCalendar(Base):
+    """One cached calendar/earnings row per ticker. Missing row means not warmed."""
+
+    __tablename__ = "earnings_calendar"
+
+    ticker: Mapped[str] = mapped_column(ForeignKey("companies.ticker"), primary_key=True)
+    report_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    hour: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+    __table_args__ = (UniqueConstraint("user_id", "ticker", "kind", "dedupe_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    ticker: Mapped[str] = mapped_column(ForeignKey("companies.ticker"))
+    kind: Mapped[str] = mapped_column(String(16))
+    dedupe_key: Mapped[str] = mapped_column(Text)
+    facts: Mapped[str] = mapped_column(Text)
+    line: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    seen: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class AlertBaseline(Base):
+    __tablename__ = "alert_baselines"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    ticker: Mapped[str] = mapped_column(ForeignKey("companies.ticker"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    baseline_key: Mapped[str] = mapped_column(Text)
+    set_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
