@@ -618,6 +618,85 @@ def test_refresher_warms_earnings_and_detection_reads_the_cache(client, monkeypa
     assert _alerts(user_id) == []
 
 
+def test_past_earnings_alerts_are_hidden_but_not_forgotten(client):
+    user_id = _onboard(client, ["gaming"])
+    _like(client, user_id, "NVDA")
+    _like(client, user_id, "AMD")
+    today = datetime.now(NEW_YORK).date()
+    outside = today + timedelta(days=6)
+    _set_earnings("NVDA", outside.isoformat())
+    _detect(user_id, now=datetime.now(timezone.utc))
+    _set_earnings("NVDA", (today + timedelta(days=1)).isoformat(), "amc")
+    _detect(user_id, now=datetime.now(timezone.utc))
+
+    def listed():
+        response = client.get("/updates", params={"user_id": user_id})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        earnings = [item for item in body["alerts"] if item["kind"] == "earnings"]
+        return earnings, body["unseen_count"]
+
+    day_before, unseen = listed()
+    assert len(day_before) == 1
+    assert unseen == 1
+    alert_id = day_before[0]["id"]
+
+    _rewrite_earnings_date(alert_id, today.isoformat())
+    on_the_day, unseen = listed()
+    assert [item["id"] for item in on_the_day] == [alert_id]
+    assert unseen == 1
+
+    _rewrite_earnings_date(alert_id, (today - timedelta(days=1)).isoformat())
+    hidden, unseen = listed()
+    assert hidden == []
+    assert unseen == 0
+    assert _alerts(user_id)
+    assert _baseline(user_id, "NVDA", "earnings") == "none"
+    _detect(user_id, now=datetime.now(timezone.utc))
+    assert len(_alerts(user_id)) == 1
+
+
+def _rewrite_earnings_date(alert_id, iso_date):
+    import json
+
+    from app.db import SessionLocal
+    from app.models import Alert
+
+    session = SessionLocal()
+    row = session.get(Alert, alert_id)
+    assert row is not None
+    facts = json.loads(row.facts)
+    facts["date"] = iso_date
+    row.facts = json.dumps(facts)
+    session.commit()
+    session.close()
+
+
+def test_news_headline_quotes_become_single_quotes(client):
+    user_id = _onboard(client, ["gaming"])
+    _like(client, user_id, "NVDA")
+    _set_company(
+        "NVDA",
+        latest_news_headline="NVIDIA opens a new office",
+        latest_news_unix=(NOW - timedelta(hours=2)).timestamp(),
+        latest_news_id="office-quote",
+        latest_news_date="2026-11-08",
+    )
+    _detect(user_id)
+    _set_company(
+        "NVDA",
+        latest_news_headline='NVIDIA earnings say "hello" and \u201cgoodbye\u201d',
+        latest_news_unix=(NOW - timedelta(hours=1)).timestamp(),
+        latest_news_id="quoted",
+        latest_news_date="2026-11-09",
+        latest_news_source="Example Wire",
+    )
+    _detect(user_id)
+    assert _alerts(user_id)[-1][2] == (
+        "New for NVIDIA: \"NVIDIA earnings say 'hello' and 'goodbye'\" (Example Wire, Nov 9)."
+    )
+
+
 def test_alerts_are_newest_first_and_capped(client):
     from app.db import SessionLocal, utcnow
     from app.models import Alert

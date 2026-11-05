@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -13,7 +13,7 @@ from app.db import get_db
 from app.models import Alert, Company, Match, User
 from app.schemas import AlertOut, UpdateOut, UpdatesOut
 from app.services.cards import liked_display_name
-from app.services.catalysts import detect_for_user
+from app.services.catalysts import NEW_YORK, detect_for_user, earnings_alert_is_current
 from app.services.updates import build_update
 
 logger = logging.getLogger("fund.updates")
@@ -71,6 +71,8 @@ def _alerts_for_user(db: Session, user_id: str) -> tuple[list[AlertOut], int]:
         .order_by(Alert.created_at.desc(), Alert.id.desc())
         .all()
     )
+    today_et = datetime.now(NEW_YORK).date()
+    rows = [row for row in rows if earnings_alert_is_current(row.kind, row.facts, today_et)]
     unseen = sum(1 for row in rows if not row.seen)
     alerts: list[AlertOut] = []
     for row in rows[:ALERT_CAP]:

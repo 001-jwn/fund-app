@@ -566,4 +566,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `66 passed`.
+The last line should include `68 passed`.

@@ -303,11 +303,35 @@ def _news_line(name: str, headline: str, news_date: str | None, source: str) -> 
     shown_date = _month_day_from_iso(news_date)
     if not name or not headline or not shown_date:
         return None
+    safe_headline = _single_quotes(headline)
     if source:
         return LINE_TEMPLATES["news"].format(
-            name=name, headline=headline, source=source, date=shown_date
+            name=name, headline=safe_headline, source=source, date=shown_date
         )
-    return LINE_TEMPLATES["news_no_source"].format(name=name, headline=headline, date=shown_date)
+    return LINE_TEMPLATES["news_no_source"].format(
+        name=name, headline=safe_headline, date=shown_date
+    )
+
+
+def _single_quotes(headline: str) -> str:
+    """Keep the template's outer quotes from wrapping more double quotes."""
+    return headline.replace('"', "'").replace("“", "'").replace("”", "'")
+
+
+def earnings_alert_is_current(kind: str, facts_json: str | None, today_et) -> bool:
+    """Past earnings dates stay stored, but they are not shown or counted."""
+    if kind != "earnings":
+        return True
+    try:
+        facts = json.loads(facts_json or "{}")
+    except json.JSONDecodeError:
+        return True
+    if not isinstance(facts, dict):
+        return True
+    report = _parse_date(facts.get("date") if isinstance(facts.get("date"), str) else None)
+    if report is None:
+        return True
+    return report >= today_et
 
 
 def _month_day_from_iso(value: str | None) -> str | None:
