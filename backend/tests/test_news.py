@@ -278,6 +278,245 @@ def test_trailing_ellipsis_is_trimmed_from_headline_and_summary():
     ) == "The auto supplier pointed to steady demand this quarter."
 
 
+ADVICE_PATTERNS = [
+    "buy",
+    "buying",
+    "sell",
+    "selling",
+    "take profit",
+    "take profits",
+    "should you",
+    "stock to own",
+    "stocks to own",
+    "maintains",
+    "reiterates",
+    "price target",
+    "upgrade",
+    "upgrades",
+    "downgrade",
+    "downgrades",
+    "outperform",
+    "underperform",
+    "overweight",
+    "underweight",
+]
+
+
+def test_advice_headlines_are_skipped_and_hold_or_buyback_are_kept():
+    assert load_rules()["advice_headline_patterns"] == ADVICE_PATTERNS
+    assert "hold" not in ADVICE_PATTERNS
+    assert load_rules()["max_other_notable_names_in_headline"] == 0
+
+    assert select_company_news(
+        [{
+            "headline": "Apple: Buy, Hold or Sell?",
+            "summary": "A broker note weighs the shares after the latest quarter.",
+            "datetime": 50,
+        }],
+        "AAPL",
+    ) is None
+    assert select_company_news(
+        [{
+            "headline": "Spotify Maintains Hold",
+            "summary": "The firm left its rating unchanged after the latest report.",
+            "datetime": 50,
+        }],
+        "SPOT",
+    ) is None
+    assert select_company_news(
+        [{
+            "headline": "Tesla Price Target Raised",
+            "summary": "The new target sits above the last close for the shares.",
+            "datetime": 50,
+        }],
+        "TSLA",
+    ) is None
+
+    held = select_company_news(
+        [{
+            "headline": "Apple: Free Cash Flow Is the Number That Has to Hold",
+            "summary": "The column looks at cash generation rather than a rating.",
+            "datetime": 40,
+        }],
+        "AAPL",
+    )
+    assert held is not None
+    assert held.headline == "Apple: Free Cash Flow Is the Number That Has to Hold"
+
+    # "buy" is an advice word, but it must not match inside "buyback".
+    buyback = select_company_news(
+        [{
+            "headline": "Apple announces a large buyback",
+            "summary": "The board approved a new repurchase program this quarter.",
+            "datetime": 30,
+        }],
+        "AAPL",
+    )
+    assert buyback is not None
+    assert buyback.headline == "Apple announces a large buyback"
+
+
+def test_booking_own_name_is_not_counted_as_another_company():
+    # "Booking" is on the other-names list and is also a word in Booking Holdings.
+    # That used to reject BKNG's own headlines. A real rival still does.
+    picked = select_company_news(
+        [
+            {
+                "headline": "Booking Holdings Price Target Raised",
+                "summary": "A broker lifted its target after the latest travel note.",
+                "datetime": 30,
+            },
+            {
+                "headline": "Booking Holdings raises its full-year outlook",
+                "summary": "Travel demand stayed ahead of the same quarter last year.",
+                "datetime": 10,
+            },
+        ],
+        "BKNG",
+    )
+    assert picked is not None
+    assert picked.headline == "Booking Holdings raises its full-year outlook"
+    assert select_company_news(
+        [{
+            "headline": "Booking Holdings tops Expedia on summer trips",
+            "summary": "Both travel names pointed to stronger demand this season.",
+            "datetime": 12,
+        }],
+        "BKNG",
+    ) is None
+
+
+def test_stricter_rules_pick_bwa_spot_gm_tsla_and_aapl():
+    cases = [
+        (
+            "BWA",
+            [
+                {
+                    "headline": "BorgWarner: Buy, Hold or Sell?",
+                    "summary": "A rating roundup that is not a story about the supplier.",
+                    "datetime": 30,
+                },
+                {
+                    "headline": "BorgWarner and Tesla win a supply contract",
+                    "summary": "The note names two companies and is not BorgWarner alone.",
+                    "datetime": 20,
+                },
+                {
+                    "headline": "BorgWarner raises its full-year outlook",
+                    "summary": "The supplier pointed to steady demand from automakers.",
+                    "datetime": 10,
+                },
+            ],
+            "BorgWarner raises its full-year outlook",
+        ),
+        (
+            "SPOT",
+            [
+                {
+                    "headline": "Spotify Maintains Hold",
+                    "summary": "The firm left its rating unchanged after the latest report.",
+                    "datetime": 30,
+                },
+                {
+                    "headline": "Spotify adds listeners in the latest quarter",
+                    "summary": "Monthly users grew from the same quarter a year earlier.",
+                    "datetime": 15,
+                },
+            ],
+            "Spotify adds listeners in the latest quarter",
+        ),
+        (
+            "GM",
+            [
+                {
+                    "headline": "GM stock jumps on a truck rumor",
+                    "summary": "The bare ticker is not enough to count as the company name.",
+                    "datetime": 40,
+                },
+                {
+                    "headline": "General Motors Price Target Raised",
+                    "summary": "A broker set a higher target after the delivery update.",
+                    "datetime": 25,
+                },
+                {
+                    "headline": "General Motors raises truck output",
+                    "summary": "The company pointed to steady demand for full-size trucks.",
+                    "datetime": 12,
+                },
+            ],
+            "General Motors raises truck output",
+        ),
+        (
+            "TSLA",
+            [
+                {
+                    "headline": "Tesla and Apple share a supplier update",
+                    "summary": "The note is about two companies, not Tesla on its own.",
+                    "datetime": 28,
+                },
+                {
+                    "headline": "Tesla starts production at a new factory",
+                    "summary": "The plant began building vehicles for customer deliveries.",
+                    "datetime": 14,
+                },
+            ],
+            "Tesla starts production at a new factory",
+        ),
+        (
+            "AAPL",
+            [
+                {
+                    "headline": "Apple Price Target Raised",
+                    "summary": "The new target sits above the last close for the shares.",
+                    "datetime": 40,
+                },
+                {
+                    "headline": "META, AAPL, AMD... In Focus",
+                    "summary": "Traders watched a handful of large technology names today.",
+                    "datetime": 35,
+                },
+                {
+                    "headline": "Apple announces a large buyback",
+                    "summary": "The board approved a new repurchase program this quarter.",
+                    "datetime": 22,
+                },
+                {
+                    "headline": "Apple opens a new store",
+                    "summary": "The company added a location and hired more retail staff.",
+                    "datetime": 11,
+                },
+            ],
+            "Apple announces a large buyback",
+        ),
+    ]
+    for ticker, articles, headline in cases:
+        picked = select_company_news(articles, ticker)
+        assert picked is not None, ticker
+        assert picked.headline == headline, ticker
+
+
+def test_no_passing_story_keeps_the_empty_news_message():
+    # Nothing left to show becomes the same empty-state line on the card.
+    blocked = [
+        ("BKNG", "Booking Holdings Price Target Raised"),
+        ("BWA", "BorgWarner: Buy, Hold or Sell?"),
+        ("SPOT", "Spotify Maintains Hold"),
+        ("GM", "General Motors Price Target Raised"),
+        ("TSLA", "Tesla and Apple share a supplier update"),
+        ("AAPL", "Apple: Buy, Hold or Sell?"),
+    ]
+    for ticker, headline in blocked:
+        assert select_company_news(
+            [{
+                "headline": headline,
+                "summary": "Nothing in this note is a plain story about the company itself.",
+                "datetime": 5,
+            }],
+            ticker,
+        ) is None
+    assert NO_RECENT_NEWS_MESSAGE == "No recent news about this company yet."
+
+
 def test_date_labels_use_the_card_copy():
     assert format_news_date_label("2026-11-02") == "News from Nov 2"
     assert format_quarter_label("2026-09-30") == "Last quarter (ended Sep 30, 2026)"
