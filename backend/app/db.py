@@ -100,13 +100,22 @@ def init_db() -> None:
     if ENGINE is None:
         configure_engine()
     Base.metadata.create_all(ENGINE)
-    _add_short_name_column_if_missing()
+    _add_missing_company_columns()
 
 
-def _add_short_name_column_if_missing() -> None:
-    """Add companies.short_name on a SQLite file created before that column.
+# Columns added after the first release. create_all does not alter an existing table.
+_MISSING_COMPANY_COLUMNS = (
+    ("short_name", "TEXT"),
+    ("latest_quote_at", "DATETIME"),
+    ("latest_news_source", "TEXT"),
+    ("latest_news_url", "TEXT"),
+)
 
-    create_all does not alter an existing table. Do not drop or recreate it.
+
+def _add_missing_company_columns() -> None:
+    """Add company columns on a SQLite file created before them.
+
+    Do not drop or recreate the table. Rows already in the file stay.
     """
     if ENGINE is None or ENGINE.dialect.name != "sqlite":
         return
@@ -114,9 +123,11 @@ def _add_short_name_column_if_missing() -> None:
         rows = conn.exec_driver_sql("PRAGMA table_info(companies)").fetchall()
         if not rows:
             return
-        if any(row[1] == "short_name" for row in rows):
-            return
-        conn.exec_driver_sql("ALTER TABLE companies ADD COLUMN short_name TEXT")
+        present = {row[1] for row in rows}
+        for name, column_type in _MISSING_COMPANY_COLUMNS:
+            if name in present:
+                continue
+            conn.exec_driver_sql(f"ALTER TABLE companies ADD COLUMN {name} {column_type}")
 
 
 def get_db() -> Generator[Session, None, None]:

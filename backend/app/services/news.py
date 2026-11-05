@@ -48,6 +48,8 @@ class SelectedNews:
     headline: str
     summary: str | None
     news_date: str | None
+    source: str | None = None
+    url: str | None = None
 
 
 def load_rules() -> dict:
@@ -131,7 +133,13 @@ def select_company_news(articles: list, ticker: str) -> SelectedNews | None:
     headline = _trim_trailing_ellipsis(str(newest.get("headline")).strip())
     raw_summary = newest.get("summary") if isinstance(newest.get("summary"), str) else None
     summary = clean_summary(raw_summary, headline)
-    return SelectedNews(headline=headline, summary=summary, news_date=_iso_from_unix(newest.get("datetime")))
+    return SelectedNews(
+        headline=headline,
+        summary=summary,
+        news_date=_iso_from_unix(newest.get("datetime")),
+        source=_optional_text(newest.get("source")),
+        url=_optional_text(newest.get("url")),
+    )
 
 
 def _reject_reason(article: dict, ticker: str) -> str | None:
@@ -321,6 +329,13 @@ def format_quarter_label(iso_date: str | None) -> str | None:
     if parsed is None:
         return None
     return f"Last quarter (ended {_MONTHS[parsed.month - 1]} {parsed.day}, {parsed.year})"
+
+
+def _optional_text(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
 
 
 def _iso_from_unix(value) -> str | None:

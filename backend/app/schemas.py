@@ -61,6 +61,16 @@ class MatchesOut(BaseModel):
     matches: list[MatchOut]
 
 
+class UpdateOut(BaseModel):
+    ticker: str
+    lines: list[str]
+    news_url: str | None = None
+
+
+class UpdatesOut(BaseModel):
+    updates: list[UpdateOut]
+
+
 class HealthOut(BaseModel):
     status: str
     finnhub: str
