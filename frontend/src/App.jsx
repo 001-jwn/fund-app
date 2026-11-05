@@ -7,6 +7,7 @@ import {
   likeCompany,
   onboard,
 } from "./api";
+import { becauseLikedText, nextQueueAfterLike, priceLine } from "./cardText";
 
 const USER_KEY = "fund_user_id";
 
@@ -16,19 +17,6 @@ const INTERESTS = [
   { id: "music", label: "Music" },
   { id: "automobile", label: "Automobile" },
 ];
-
-function priceLine(card) {
-  if (!card.price_available || card.current_price == null) {
-    return "Price: unavailable";
-  }
-  const money = `$${Number(card.current_price).toFixed(2)}`;
-  if (card.price_change_percent == null) {
-    return `Price: ${money}`;
-  }
-  const pct = Number(card.price_change_percent);
-  const sign = pct > 0 ? "+" : "";
-  return `Price: ${money} (${sign}${pct.toFixed(2)}% change)`;
-}
 
 function newsBlock(card) {
   if (card.news_status === "none") {
@@ -53,6 +41,12 @@ function Why({ line }) {
       <p>{line}</p>
     </div>
   );
+}
+
+function BecauseLiked({ card }) {
+  const text = becauseLikedText(card);
+  if (!text) return null;
+  return <p className="row">{text}</p>;
 }
 
 export default function App() {
@@ -189,22 +183,31 @@ export default function App() {
 
   async function swipe(action) {
     if (!current || busy) return;
+    const queueNow = queue;
+    const ticker = current.ticker;
     setBusy(true);
     setError("");
     try {
       if (action === "like") {
-        await likeCompany(userId, current.ticker);
+        await likeCompany(userId, ticker);
+        try {
+          const data = await getCards(userId, 10);
+          setQueue(nextQueueAfterLike(queueNow, ticker, data.cards));
+        } catch (err) {
+          setQueue(queueNow.filter((card) => card.ticker !== ticker));
+          throw err;
+        }
       } else {
-        await dislikeCompany(userId, current.ticker);
-      }
-      const rest = queue.slice(1);
-      if (rest.length < 3) {
-        const data = await getCards(userId, 10);
-        const seen = new Set(rest.map((card) => card.ticker));
-        const extra = (data.cards || []).filter((card) => !seen.has(card.ticker));
-        setQueue(rest.concat(extra));
-      } else {
-        setQueue(rest);
+        await dislikeCompany(userId, ticker);
+        const rest = queueNow.slice(1);
+        if (rest.length < 3) {
+          const data = await getCards(userId, 10);
+          const seen = new Set(rest.map((card) => card.ticker));
+          const extra = (data.cards || []).filter((card) => !seen.has(card.ticker));
+          setQueue(rest.concat(extra));
+        } else {
+          setQueue(rest);
+        }
       }
     } catch (err) {
       setError(err.message);
@@ -276,6 +279,7 @@ export default function App() {
                 {current.company_name} ({current.ticker})
               </h3>
               <Why line={current.why_line} />
+              <BecauseLiked card={current} />
               <p className="row">{priceLine(current)}</p>
               <p className="row">{current.short_description}</p>
               {newsBlock(current)}
@@ -305,6 +309,7 @@ export default function App() {
                 {match.company_name} ({match.ticker})
               </h3>
               <Why line={match.why_line} />
+              <BecauseLiked card={match} />
               <p className="row">{priceLine(match)}</p>
               <p className="row">{match.short_description}</p>
             </article>
