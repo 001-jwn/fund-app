@@ -37,6 +37,14 @@ def user_interest_set(rows: list[UserInterest]) -> set[str]:
     return {row.interest for row in rows}
 
 
+def liked_display_name(company: Company) -> str:
+    """Short name when it is set, otherwise the full company name."""
+    short = (company.short_name or "").strip()
+    if short:
+        return short
+    return company.company_name
+
+
 def public_card(company: Company, link: CompanyInterest) -> dict:
     price_ok = company.current_price is not None
     raw_headline = (company.latest_news_headline or "").strip()
@@ -64,6 +72,7 @@ def public_card(company: Company, link: CompanyInterest) -> dict:
     return {
         "ticker": company.ticker,
         "company_name": company.company_name,
+        "short_name": (company.short_name or "").strip() or None,
         "short_description": company.short_description,
         "current_price": company.current_price if price_ok else None,
         "price_change_percent": company.price_change_percent if price_ok else None,

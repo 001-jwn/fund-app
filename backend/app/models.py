@@ -15,6 +15,8 @@ class Company(Base):
 
     ticker: Mapped[str] = mapped_column(String(32), primary_key=True)
     company_name: Mapped[str] = mapped_column(String(255))
+    # Nullable. Older fund.db files gain this column at startup; blank falls back to company_name.
+    short_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     short_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     current_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     price_change_percent: Mapped[float | None] = mapped_column(Float, nullable=True)

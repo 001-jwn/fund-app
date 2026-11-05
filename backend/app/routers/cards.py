@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Company, CompanyInterest, Dislike, Like, User, UserInterest
 from app.schemas import CardOut, CardsOut
-from app.services.cards import LikedCompany, index_company_interests, order_feed_cards
+from app.services.cards import (
+    LikedCompany,
+    index_company_interests,
+    liked_display_name,
+    order_feed_cards,
+)
 
 router = APIRouter()
 
@@ -38,7 +43,7 @@ def get_cards(
     liked_tickers = [row.ticker for row in like_rows]
     if liked_tickers:
         for company in db.query(Company).filter(Company.ticker.in_(liked_tickers)).all():
-            names[company.ticker] = company.company_name
+            names[company.ticker] = liked_display_name(company)
 
     liked = [
         LikedCompany(

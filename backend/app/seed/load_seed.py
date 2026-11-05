@@ -51,6 +51,7 @@ def _upsert_company(session, raw: dict) -> None:
         company = Company(
             ticker=ticker,
             company_name=str(raw.get("company_name") or ticker),
+            short_name=_text(raw.get("short_name")),
             short_description=_text(raw.get("short_description")),
             current_price=None,
             price_change_percent=None,
@@ -70,6 +71,7 @@ def _upsert_company(session, raw: dict) -> None:
         # Curated copy only. Do not wipe a cached price, logo, or headline
         # just because the seed file keeps those fields null on purpose.
         company.company_name = str(raw.get("company_name") or company.company_name)
+        company.short_name = _text(raw.get("short_name"))
         company.short_description = _text(raw.get("short_description"))
         company.quarterly_summary = _text(raw.get("quarterly_summary"))
         company.last_quarter_date = _text(raw.get("last_quarter_date"))
