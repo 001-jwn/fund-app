@@ -25,6 +25,11 @@ class Company(Base):
     latest_news_headline: Mapped[str | None] = mapped_column(Text, nullable=True)
     latest_news_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     latest_news_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Quote time and the picked article's source and URL. Nullable so older
+    # fund.db files can gain the columns without a rebuild.
+    latest_quote_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    latest_news_source: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latest_news_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     quarterly_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_quarter_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
     logo_url: Mapped[str | None] = mapped_column(Text, nullable=True)

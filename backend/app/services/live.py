@@ -12,9 +12,10 @@ until that cache entry expires. Calls stay about 1.1 seconds apart.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from app import db as dbmod
 from app.db import utcnow
@@ -88,8 +89,9 @@ def _refresh_phase(ticker: str, phase: str) -> None:
             client = get_client()
             if phase == "quote":
                 quote = client.get_quote(ticker)
-                price, pct = _price_from_quote(quote if isinstance(quote, dict) else {})
-                _store_quote(ticker, price, pct)
+                payload = quote if isinstance(quote, dict) else {}
+                price, pct = _price_from_quote(payload)
+                _store_quote(ticker, price, pct, _quote_at(payload))
             elif phase == "news":
                 today = date.today()
                 news_from = (today - timedelta(days=30)).isoformat()
@@ -107,13 +109,36 @@ def _refresh_phase(ticker: str, phase: str) -> None:
         logger.exception("Finnhub %s refresh failed for %s", phase, ticker)
 
 
-def _store_quote(ticker: str, price: float | None, pct: float | None) -> None:
-    if price is None:
+def _quote_at(quote: dict) -> datetime | None:
+    """Finnhub quote `t` is unix seconds. Missing, zero, or negative is unusable."""
+    raw = quote.get("t")
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    if not math.isfinite(raw) or raw <= 0:
+        return None
+    try:
+        return datetime.fromtimestamp(float(raw), tz=timezone.utc).replace(tzinfo=None)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _store_quote(
+    ticker: str,
+    price: float | None,
+    pct: float | None,
+    quote_at: datetime | None,
+) -> None:
+    # Price, change, and timestamp are one quote. A missing timestamp is as
+    # unusable as c == 0: leave the last valid cache row alone.
+    if price is None or quote_at is None:
+        return
+    if pct is not None and (isinstance(pct, bool) or not isinstance(pct, (int, float)) or not math.isfinite(pct)):
         return
 
     def apply(company: Company) -> bool:
         company.current_price = float(price)
-        company.price_change_percent = float(pct) if isinstance(pct, (int, float)) and not isinstance(pct, bool) else None
+        company.price_change_percent = float(pct) if pct is not None else None
+        company.latest_quote_at = quote_at
         return True
 
     _update_company(ticker, apply)
@@ -125,10 +150,14 @@ def _store_news(ticker: str, picked) -> None:
             company.latest_news_headline = NO_RECENT_NEWS_SENTINEL
             company.latest_news_summary = None
             company.latest_news_date = None
+            company.latest_news_source = None
+            company.latest_news_url = None
             return True
         company.latest_news_headline = picked.headline
         company.latest_news_summary = picked.summary
         company.latest_news_date = picked.news_date
+        company.latest_news_source = picked.source
+        company.latest_news_url = picked.url
         return True
 
     _update_company(ticker, apply)

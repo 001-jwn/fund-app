@@ -14,6 +14,7 @@ There is no ranking score beyond recency.
 from __future__ import annotations
 
 import json
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -48,6 +49,8 @@ class SelectedNews:
     headline: str
     summary: str | None
     news_date: str | None
+    source: str | None = None
+    url: str | None = None
 
 
 def load_rules() -> dict:
@@ -121,8 +124,9 @@ def select_company_news(articles: list, ticker: str) -> SelectedNews | None:
             continue
         if _reject_reason(article, ticker) is not None:
             continue
-        when = article.get("datetime")
-        stamp = float(when) if isinstance(when, (int, float)) and not isinstance(when, bool) else 0.0
+        stamp = _usable_unix(article.get("datetime"))
+        if stamp is None or _iso_from_unix(stamp) is None:
+            continue
         candidates.append((stamp, article))
     if not candidates:
         return None
@@ -131,7 +135,13 @@ def select_company_news(articles: list, ticker: str) -> SelectedNews | None:
     headline = _trim_trailing_ellipsis(str(newest.get("headline")).strip())
     raw_summary = newest.get("summary") if isinstance(newest.get("summary"), str) else None
     summary = clean_summary(raw_summary, headline)
-    return SelectedNews(headline=headline, summary=summary, news_date=_iso_from_unix(newest.get("datetime")))
+    return SelectedNews(
+        headline=headline,
+        summary=summary,
+        news_date=_iso_from_unix(newest.get("datetime")),
+        source=_optional_text(newest.get("source")),
+        url=_optional_text(newest.get("url")),
+    )
 
 
 def _reject_reason(article: dict, ticker: str) -> str | None:
@@ -323,10 +333,30 @@ def format_quarter_label(iso_date: str | None) -> str | None:
     return f"Last quarter (ended {_MONTHS[parsed.month - 1]} {parsed.day}, {parsed.year})"
 
 
-def _iso_from_unix(value) -> str | None:
+def _optional_text(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
+
+
+def _usable_unix(value) -> float | None:
+    """A real unix time. Zero and negative values are not dates."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return time.strftime("%Y-%m-%d", time.gmtime(value))
+    if not math.isfinite(value) or value <= 0:
+        return None
+    return float(value)
+
+
+def _iso_from_unix(value) -> str | None:
+    stamp = _usable_unix(value)
+    if stamp is None:
+        return None
+    try:
+        return time.strftime("%Y-%m-%d", time.gmtime(stamp))
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def _parse_iso_date(value: str | None) -> datetime | None:

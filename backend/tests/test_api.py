@@ -284,7 +284,7 @@ def test_refresh_stores_live_fields_and_keeps_seed_quarter_date(client, monkeypa
 
     def fake_quote(_self, symbol):
         assert symbol == "NVDA"
-        return {"c": 210.5, "dp": 1.25}
+        return {"c": 210.5, "dp": 1.25, "t": 1793577600}
 
     def fake_news(_self, symbol, _news_from, _news_to):
         return [
@@ -467,7 +467,7 @@ def test_no_matching_news_uses_the_empty_message(client, monkeypatch, tmp_path):
 
     def fake_quote(_self, symbol):
         calls.append(("quote", symbol))
-        return {"c": 20.0, "dp": 0.5}
+        return {"c": 20.0, "dp": 0.5, "t": 1793577600}
 
     def fake_news(_self, symbol, _news_from, _news_to):
         calls.append(("news", symbol))

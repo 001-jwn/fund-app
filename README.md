@@ -524,6 +524,22 @@ Each company card shows one news headline. A story is kept only when it passes e
 5. A headline that only mentions the company at the very end is skipped, when the story has already been about someone else.
 6. From the stories that are left, the newest one is shown. If none are left, the card says "No recent news about this company yet."
 
+## Updates
+
+`GET /updates?user_id=` reads the cache for the stocks you already liked. It does not call Finnhub, even when the cache is old. The list is in the same order as Matches. Each item is the ticker, one or two lines, and `news_url` (a link, or null).
+
+The price line comes first, then the news line. A line is left out when a piece of it is missing. A stock with neither line is left out of the list. If you have not liked anything, the list is empty. An unknown user gets a 404.
+
+The name is the company's short name, or the full company name when the short name is blank. The percent is the absolute change to one decimal. After that rounding, 0.0 is "about flat." The price has two decimals. A missing price, a missing percent, a missing quote time, or a price of 0 skips the price line. A quote whose time is missing, zero, negative, or not a real number is ignored, and the last good price, change, and time stay together. The time 0 is not a real quote, so it is never shown as Dec 31, 1969, and the price is never shown as US$0.00. A stored price or percent that is not a real number is skipped too, and the other stocks are still listed. The quote date is that quote's own timestamp in New York, written like Nov 3. The word "today" is not used.
+
+The news line uses the headline already chosen for the card. "No recent news about this company yet." is not a headline. The news date is the cached news date, written like Nov 3. `news_url` is null when there is no news line, or when the cached article has no URL.
+
+1. Price up: `{name} is up {pct}% (as of {quote_date}), at US${price}.`
+2. Price down: `{name} is down {pct}% (as of {quote_date}), at US${price}.`
+3. Flat: `{name} is about flat (as of {quote_date}), at US${price}.`
+4. Headline, with a source: `In the news for {name}: "{headline}" ({source}, {date}).`
+5. Headline, without a source: `In the news for {name}: "{headline}" ({date}).`
+
 ## Optional: run the automated checks
 
 You can skip this. It is for checking that the app's rules still hold. Use a new terminal in the `fund-app` folder, after step 6. Do not stop the backend if it is already running. This check uses its own temporary database.
@@ -540,4 +556,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `47 passed`.
+The last line should include `58 passed`.
