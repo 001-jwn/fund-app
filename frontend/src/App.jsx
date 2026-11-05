@@ -6,6 +6,7 @@ import {
   getMatches,
   likeCompany,
   onboard,
+  unlikeCompany,
 } from "./api";
 import { becauseLikedText, nextQueueAfterLike, priceLine } from "./cardText";
 
@@ -62,6 +63,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [finnhub, setFinnhub] = useState("off");
   const [confirmReset, setConfirmReset] = useState(false);
+  const [unliking, setUnliking] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +157,20 @@ export default function App() {
     setConfirmReset(false);
     setScreen("onboarding");
     setError(message || "");
+  }
+
+  async function unlikeMatch(ticker) {
+    if (!ticker || unliking) return;
+    setUnliking(ticker);
+    setError("");
+    try {
+      await unlikeCompany(userId, ticker);
+      setMatches((prev) => prev.filter((match) => match.ticker !== ticker));
+    } catch (err) {
+      setError(err.message || "Could not unlike that company.");
+    } finally {
+      setUnliking("");
+    }
   }
 
   function toggleInterest(id) {
@@ -312,6 +328,13 @@ export default function App() {
               <BecauseLiked card={match} />
               <p className="row">{priceLine(match)}</p>
               <p className="row">{match.short_description}</p>
+              <button
+                type="button"
+                onClick={() => unlikeMatch(match.ticker)}
+                disabled={unliking === match.ticker}
+              >
+                Unlike
+              </button>
             </article>
           ))}
         </section>
