@@ -513,6 +513,17 @@ Expo Go on the iPhone will ask for Local Network permission. Tap Allow.
 
 Anything named `EXPO_PUBLIC_*` gets built into the app, so `mobile/.env` must hold only the server URL and never the Finnhub key. The Finnhub key stays in the `.env` file next to this README.
 
+## How the news headline is picked
+
+Each company card shows one news headline. A story is kept only when it passes every rule below, in order.
+
+1. The company name, or a known nickname, has to appear in the headline itself. A mention that shows up only in the blurb under the headline does not count. A few very short tickers (such as F, U, and GM) do not count as a bare word in a sentence either. `$F` or `(U)` still can.
+2. List and market-roundup headlines are skipped. That includes "stocks to watch," "top 5," "Magnificent Seven," "movers," "week ahead," "in focus," and a headline that strings several companies together, such as `META, AAPL, AMD... In Focus`.
+3. Clickbait that is really about another stock is skipped. A line like "without this growth stock" is about some other company, even when a familiar name appears in it.
+4. A headline with no real blurb is skipped. The blurb has to be there, at least a short sentence (about 20 characters), and it cannot be only a copy of the headline or a boilerplate line such as "email help@trefis.com."
+5. A headline that only mentions the company at the very end is skipped, when the story has already been about someone else.
+6. From the stories that are left, the newest one is shown. If none are left, the card says "No recent news about this company yet."
+
 ## Optional: run the automated checks
 
 You can skip this. It is for checking that the app's rules still hold. Use a new terminal in the `fund-app` folder, after step 6. Do not stop the backend if it is already running. This check uses its own temporary database.
@@ -529,4 +540,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `34 passed`.
+The last line should include `41 passed`.

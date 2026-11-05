@@ -1,5 +1,5 @@
 {
-  "notes": "Keep a story only if its headline or summary matches one of the ticker's aliases (case-insensitive, whole-word). Tickers in no_bare_ticker must never be matched on the bare ticker. Match $TICKER or (TICKER) forms are fine for those. Prefer stories whose Finnhub 'related' field equals the ticker but still apply the name check, since Finnhub tags roundup articles with many tickers.",
+  "notes": "F1 pick rule (2026-11-03). Keep a story only if an alias appears in the HEADLINE (summary-only is excluded). Tickers in no_bare_ticker never match as a bare word; $TICKER and (TICKER) still count. Reject roundups, multi-company lists, passing-mention clickbait, trailing company mentions, and articles with no usable summary. Among survivors, pick the most recent. Finnhub related is never trusted.",
   "no_bare_ticker": ["F", "U", "GM", "TM", "HLT", "MAR", "DAL", "LUV", "AMD", "SPOT", "RACE", "SONY", "UBER", "ABNB"],
   "aliases": {
     "NVDA": ["Nvidia", "NVDA"],
@@ -41,6 +41,51 @@
     "(?i)zacks investment research.*free report.*$",
     "(?i)^\\s*$"
   ],
-  "summary_rules": "After stripping, hide the summary if it is empty, under 20 characters, or identical to the headline.",
-  "caveats": "Aliases were written by hand and haven't been tested against a full week of news. Watch Apple (fruit or produce stories are rare in finance feeds, but possible), Delta (the variant or other Deltas), Sphere (generic word, which is why only multi-word forms are listed), Unity (generic word, so only company forms are listed), and Ford (matches people named Ford; 'Ford Motor' is safest)."
+  "summary_rules": "After stripping boilerplate, a summary is usable only if it is non-empty, at least 20 characters, and not identical to the headline (ignoring trailing period/case/whitespace). Articles with no usable summary are rejected entirely (F1); the card then tries the next newer-to-older candidate.",
+  "min_summary_chars": 20,
+  "require_alias_in_headline": true,
+  "roundup_headline_patterns": [
+    "(?i)\\bstocks?\\s+to\\b",
+    "(?i)\\btop\\s+\\d+",
+    "(?i)\\b\\d+\\s+(?:best|top|stocks?|founder[- ]led|low[- ]risk|names?)\\b",
+    "(?i)magnificent\\s+seven",
+    "(?i)\\bmag(?:nificent)?\\s*7\\b",
+    "(?i)week\\s+ahead",
+    "(?i)\\b(?:top\\s+)?movers?\\b",
+    "(?i)market\\s+wrap",
+    "(?i)stocks?\\s+with\\b",
+    "(?i)\\bin\\s+focus\\b",
+    "(?i)stocks?\\s+that\\s+explain",
+    "(?i)gainers?\\s+and\\s+losers?",
+    "(?i)which\\s+(?:\\w+\\s+)?stocks?\\b",
+    "(?i)\\bstocks?\\s+to\\s+watch\\b",
+    "(?i)live\\s+coverage",
+    "(?i)stock\\s+market\\s+(?:today|election|night)"
+  ],
+  "passing_mention_headline_patterns": [
+    "(?i)without\\s+this\\s+(?:growth\\s+)?stock",
+    "(?i)here'?s\\s+why\\s+it\\s+could\\s+soar",
+    "(?i)\\bone\\s+stock\\s+(?:to|you|that)\\b",
+    "(?i)this\\s+(?:growth|one)\\s+stock\\b"
+  ],
+  "question_clickbait_headline_patterns": [
+    "(?i)^what\\s+is\\s+behind\\s+the\\s+move\\s+in\\b",
+    "(?i)^what\\s+just\\s+happened\\s+to\\b",
+    "(?i)^why\\s+is\\s+.+\\s+stock\\s+(?:up|down|moving)",
+    "(?i)^are\\s+you\\s+sure\\s+you\\s+understand\\b"
+  ],
+  "multi_company_list_headline_pattern": "(?i)(?:[A-Z][\\w.&'-]+(?:,\\s+[A-Z][\\w.&'-]+){1,},?\\s+(?:and|&)\\s+[A-Z][\\w.&'-]+)|(?:[A-Z]{2,5}(?:,\\s+[A-Z]{2,5}){2,})",
+  "notable_other_names": [
+    "Nvidia", "Microsoft", "Apple", "Amazon", "Google", "Alphabet", "Meta", "Tesla", "Oracle",
+    "Netflix", "Intel", "Broadcom", "Palantir", "CrowdStrike", "Vertiv", "Arista", "Salesforce",
+    "Adobe", "Walmart", "Costco", "Berkshire", "Shopify", "Cloudflare", "MongoDB", "Datadog",
+    "SpaceX", "Anthropic", "OpenAI", "Samsung", "Pfizer", "Marvell", "CoreWeave", "Alibaba",
+    "Grab", "Reddit", "Dell", "SoftBank", "TSMC", "SK Hynix", "Amphenol", "Copart", "Fiserv",
+    "Booking"
+  ],
+  "max_other_notable_names_in_headline": 1,
+  "trailing_mention_min_start": 40,
+  "trailing_mention_max_frac": 0.5,
+  "reject_when_other_company_leads_headline": true,
+  "caveats": "Aliases were hand-written. Watch Apple (fruit), Delta (other Deltas), Sphere/Unity (generic words — only multi-word forms listed), Ford (people named Ford; 'Ford Motor' is safest; alias strip currently lets bare 'Ford' match). Aptiv headlines may end in a literal '...' from the feed — F2 should trim display. notable_other_names is a best-effort list and will miss some rivals. Requiring a usable summary means a good headline with only Trefis boilerplate is skipped in favor of the next story (intentional for F1; existing M1 tests expected those to still be picked with summary=None)."
 }

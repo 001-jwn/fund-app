@@ -7,6 +7,8 @@ set DATABASE_URL to a postgresql:// URL and no model code has to change.
 from __future__ import annotations
 
 import os
+import sqlite3
+import time
 from collections.abc import Generator
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +18,13 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_SQLITE_PATH = BACKEND_DIR / "fund.db"
+
+# sqlite3.connect timeout is in seconds. PRAGMA busy_timeout is milliseconds.
+SQLITE_CONNECT_TIMEOUT_SECONDS = 30
+SQLITE_BUSY_TIMEOUT_MS = 30000
+# journal_mode=WAL on a brand-new file can raise "database is locked" immediately
+# (SQLITE_LOCKED, which busy_timeout does not wait out). Retry those, then move on.
+_WAL_RETRY_DELAYS_SECONDS = (0.02, 0.05, 0.1, 0.2)
 
 ENGINE = None
 SessionLocal = None
@@ -37,25 +46,49 @@ def database_url() -> str:
     return "sqlite:///" + DEFAULT_SQLITE_PATH.as_posix()
 
 
-def configure_engine(url: str | None = None):
-    """Create the engine. Safe to call again (tests use a fresh database)."""
-    global ENGINE, SessionLocal
-    url = url or database_url()
+def make_engine(url: str):
+    """Create an engine. Two SQLite engines may open the same file."""
     connect_args: dict = {}
     if url.startswith("sqlite"):
         # The background Finnhub thread and request handlers share this file.
         connect_args["check_same_thread"] = False
+        connect_args["timeout"] = SQLITE_CONNECT_TIMEOUT_SECONDS
     engine = create_engine(url, connect_args=connect_args, future=True)
     if url.startswith("sqlite"):
 
         @event.listens_for(engine, "connect")
         def _sqlite_pragmas(conn, _record):  # noqa: ANN001
             cursor = conn.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.close()
+            try:
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+                _enable_wal(cursor)
+            finally:
+                cursor.close()
 
-    ENGINE = engine
+    return engine
+
+
+def _enable_wal(cursor) -> None:
+    """Set WAL. Skip it if the file stays locked, instead of crashing startup."""
+    attempts = len(_WAL_RETRY_DELAYS_SECONDS) + 1
+    for attempt in range(attempts):
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            return
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
+            if attempt == attempts - 1:
+                return
+            time.sleep(_WAL_RETRY_DELAYS_SECONDS[attempt])
+
+
+def configure_engine(url: str | None = None):
+    """Create the engine. Safe to call again (tests use a fresh database)."""
+    global ENGINE, SessionLocal
+    url = url or database_url()
+    ENGINE = make_engine(url)
     SessionLocal = sessionmaker(bind=ENGINE, autoflush=False, autocommit=False, future=True)
     return ENGINE
 

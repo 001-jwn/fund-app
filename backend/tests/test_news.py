@@ -162,38 +162,120 @@ def test_summaries_hide_boilerplate_short_text_and_headline_copies():
     assert clean_summary(headline, headline) is None
     assert clean_summary(headline + ".", headline) is None
 
-    article = select_company_news(
+    # F1 rule 4 rejects the article when the summary is only boilerplate, a copy
+    # of the headline, or shorter than the minimum. M1 still returned that
+    # headline with summary=None. The card now tries the next story, or shows
+    # no news, instead of a headline with an empty blurb.
+    assert select_company_news(
         [{
             "headline": "Roblox posts its quarter",
             "summary": TREFIS,
             "datetime": 50,
         }],
         "RBLX",
-    )
-    assert article is not None
-    assert article.summary is None
+    ) is None
 
-    copied = select_company_news(
+    assert select_company_news(
         [{
             "headline": "NetEase games keep growing this year",
             "summary": "NetEase games keep growing this year",
             "datetime": 50,
         }],
         "NTES",
-    )
-    assert copied is not None
-    assert copied.summary is None
+    ) is None
 
-    short = select_company_news(
+    assert select_company_news(
         [{
             "headline": "Expedia adds another city to its app",
             "summary": "More cities.",
             "datetime": 50,
         }],
         "EXPE",
+    ) is None
+
+
+def test_f1_skips_roundup_and_passing_mention_headlines():
+    roundup = select_company_news(
+        [{
+            "headline": "META, AAPL, AMD... In Focus",
+            "summary": "Apple was one of several large names traders watched today.",
+            "datetime": 10,
+        }],
+        "AAPL",
     )
-    assert short is not None
-    assert short.summary is None
+    assert roundup is None
+
+    clickbait = select_company_news(
+        [{
+            "headline": "Microsoft and Oracle can't cool data centers without this growth stock",
+            "summary": "The piece is about a different supplier, not Microsoft's own results.",
+            "datetime": 11,
+        }],
+        "MSFT",
+    )
+    assert clickbait is None
+
+
+def test_f1_requires_the_company_name_in_the_headline():
+    summary_only = select_company_news(
+        [{
+            "headline": "Suppliers ride a hardware upgrade cycle",
+            "summary": "Apple told investors that iPhone demand held up through the quarter.",
+            "datetime": 12,
+        }],
+        "AAPL",
+    )
+    assert summary_only is None
+
+
+def test_f1_newest_passing_headline_wins():
+    picked = select_company_news(
+        [
+            {
+                "headline": "Apple opens a new store",
+                "summary": "The company added a location and hired more retail staff.",
+                "datetime": 10,
+            },
+            {
+                "headline": "META, AAPL, AMD... In Focus",
+                "summary": "Traders watched a handful of large technology names today.",
+                "datetime": 30,
+            },
+            {
+                "headline": "Apple services revenue climbs again",
+                "summary": "App Store sales were ahead of the same quarter last year.",
+                "datetime": 20,
+            },
+        ],
+        "AAPL",
+    )
+    assert picked is not None
+    assert picked.headline == "Apple services revenue climbs again"
+
+
+def test_trailing_ellipsis_is_trimmed_from_headline_and_summary():
+    assert clean_summary(
+        "The auto supplier pointed to steady demand this quarter…  ",
+        "Aptiv raises its outlook",
+    ) == "The auto supplier pointed to steady demand this quarter"
+
+    picked = select_company_news(
+        [{
+            "headline": "Aptiv raises its outlook...",
+            "summary": "The auto supplier pointed to steady demand this quarter... ",
+            "datetime": 20,
+        }],
+        "APTV",
+    )
+    assert picked is not None
+    assert picked.headline == "Aptiv raises its outlook"
+    assert picked.summary == "The auto supplier pointed to steady demand this quarter"
+
+    # A real sentence period is not a cut-off and stays on the card.
+    assert clean_summary(
+        "The auto supplier pointed to steady demand this quarter.",
+        "Aptiv raises its outlook",
+    ) == "The auto supplier pointed to steady demand this quarter."
 
 
 def test_date_labels_use_the_card_copy():
