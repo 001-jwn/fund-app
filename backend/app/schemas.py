@@ -28,6 +28,7 @@ class SwipeOut(BaseModel):
 class CardOut(BaseModel):
     ticker: str
     company_name: str
+    short_name: str | None = None
     short_description: str | None = None
     current_price: float | None = None
     price_change_percent: float | None = None

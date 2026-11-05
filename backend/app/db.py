@@ -100,6 +100,23 @@ def init_db() -> None:
     if ENGINE is None:
         configure_engine()
     Base.metadata.create_all(ENGINE)
+    _add_short_name_column_if_missing()
+
+
+def _add_short_name_column_if_missing() -> None:
+    """Add companies.short_name on a SQLite file created before that column.
+
+    create_all does not alter an existing table. Do not drop or recreate it.
+    """
+    if ENGINE is None or ENGINE.dialect.name != "sqlite":
+        return
+    with ENGINE.begin() as conn:
+        rows = conn.exec_driver_sql("PRAGMA table_info(companies)").fetchall()
+        if not rows:
+            return
+        if any(row[1] == "short_name" for row in rows):
+            return
+        conn.exec_driver_sql("ALTER TABLE companies ADD COLUMN short_name TEXT")
 
 
 def get_db() -> Generator[Session, None, None]:

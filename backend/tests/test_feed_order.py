@@ -107,7 +107,7 @@ def test_liked_and_disliked_never_return_and_shared_tags_rank_higher(client):
     # Two interests, so the shared Gaming tag is enough to name NVIDIA.
     for card in cards:
         if card["ticker"] in GAMING:
-            assert card["because_liked"] == "NVIDIA Corporation"
+            assert card["because_liked"] == "NVIDIA"
         else:
             assert card["because_liked"] is None
     assert _cards(client, user_id) == cards
@@ -145,7 +145,7 @@ def test_extra_shared_tag_sets_because_liked_and_ranks_first(client):
     sony = cards[0]
     assert sony["interest"] == "gaming"
     assert sony["why_line"] == SONY_WHY
-    assert sony["because_liked"] == "NVIDIA Corporation"
+    assert sony["because_liked"] == "NVIDIA"
 
     amd = next(card for card in cards if card["ticker"] == "AMD")
     assert amd["interest"] == "gaming"
@@ -153,7 +153,7 @@ def test_extra_shared_tag_sets_because_liked_and_ranks_first(client):
 
     top = _cards(client, user_id, limit=1)
     assert [card["ticker"] for card in top] == ["SONY"]
-    assert top[0]["because_liked"] == "NVIDIA Corporation"
+    assert top[0]["because_liked"] == "NVIDIA"
 
     hidden = client.post("/dislike", json={"user_id": user_id, "ticker": "SONY"})
     assert hidden.status_code == 200
@@ -230,7 +230,7 @@ def test_all_four_interests_names_sony_on_the_amd_card(client):
     amd = next(card for card in cards if card["ticker"] == "AMD")
     assert amd["interest"] == "gaming"
     assert amd["why_line"].startswith("You picked Gaming")
-    assert amd["because_liked"] == "Sony Group Corporation"
+    assert amd["because_liked"] == "Sony"
     assert "SONY" not in {card["ticker"] for card in cards}
     travel = next(card for card in cards if card["ticker"] == "BKNG")
     assert travel["because_liked"] is None
