@@ -84,3 +84,8 @@ export function getMatches(userId) {
   const params = new URLSearchParams({ user_id: userId });
   return request(`/matches?${params.toString()}`);
 }
+
+export function getUpdates(userId) {
+  const params = new URLSearchParams({ user_id: userId });
+  return request(`/updates?${params.toString()}`);
+}

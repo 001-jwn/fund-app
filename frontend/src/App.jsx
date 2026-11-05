@@ -4,6 +4,7 @@ import {
   getCards,
   getHealth,
   getMatches,
+  getUpdates,
   likeCompany,
   onboard,
   unlikeCompany,
@@ -58,6 +59,7 @@ export default function App() {
   const [picked, setPicked] = useState([]);
   const [queue, setQueue] = useState([]);
   const [matches, setMatches] = useState([]);
+  const [updates, setUpdates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -129,6 +131,31 @@ export default function App() {
     };
   }, [screen, userId]);
 
+  useEffect(() => {
+    if (screen !== "updates" || !userId) return undefined;
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    getUpdates(userId)
+      .then((data) => {
+        if (!cancelled) setUpdates(data.updates || []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err.status === 404) {
+          forgetUser("That session was not found. Pick your interests again.");
+        } else {
+          setError(err.message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [screen, userId]);
+
   const current = queue[0];
 
   useEffect(() => {
@@ -153,6 +180,7 @@ export default function App() {
     setUserId("");
     setQueue([]);
     setMatches([]);
+    setUpdates([]);
     setPicked([]);
     setConfirmReset(false);
     setScreen("onboarding");
@@ -241,6 +269,7 @@ export default function App() {
         <nav>
           <button type="button" onClick={() => setScreen("swipe")}>Swipe</button>
           <button type="button" onClick={() => setScreen("matches")}>Matches</button>
+          <button type="button" onClick={() => setScreen("updates")}>Updates</button>
           {confirmReset ? (
             <div>
               <p>Start over? This clears your interests and likes.</p>
@@ -337,6 +366,38 @@ export default function App() {
               </button>
             </article>
           ))}
+        </section>
+      ) : null}
+
+      {screen === "updates" ? (
+        <section>
+          <h2>Updates</h2>
+          {loading ? <p>Loading updates...</p> : null}
+          {!loading && updates.length === 0 ? (
+            <p>Like a few stocks and their daily updates will show up here.</p>
+          ) : null}
+          {updates.map((update) => {
+            const lines = Array.isArray(update.lines) ? update.lines : [];
+            const newsUrl = typeof update.news_url === "string" && update.news_url ? update.news_url : null;
+            return (
+              <article className="card" key={update.ticker}>
+                <h3>{update.ticker}</h3>
+                {lines.map((line, index) => {
+                  const linked = Boolean(newsUrl) && index === lines.length - 1;
+                  if (linked) {
+                    return (
+                      <p className="row" key={`${update.ticker}-${index}`}>
+                        <a href={newsUrl} target="_blank" rel="noopener noreferrer">{line}</a>
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="row" key={`${update.ticker}-${index}`}>{line}</p>
+                  );
+                })}
+              </article>
+            );
+          })}
         </section>
       ) : null}
     </main>
