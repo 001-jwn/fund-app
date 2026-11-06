@@ -32,6 +32,26 @@ label {
   margin-top: 12px;
 }
 
+.card.alert {
+  border-style: dashed;
+  background: #ffe9c7;
+}
+
+.alert-label {
+  font-weight: bold;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.unseen {
+  font-weight: bold;
+}
+
+.helper {
+  margin: 8px 0;
+  font-style: italic;
+}
+
 .why {
   border: 4px solid #111;
   background: #fff3a0;

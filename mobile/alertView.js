@@ -1,0 +1,95 @@
+// Same file in frontend/src and mobile. Keep the two copies identical.
+
+export const NO_LIKES_COPY =
+  "Like a few stocks and their daily updates will show up here.";
+
+export const NO_NEWS_COPY =
+  "No big news on your liked stocks right now. We'll flag big price moves, upcoming results and fresh headlines here.";
+
+export const PRICE_HELPER =
+  "We flag a liked stock when its price moves 5% or more in a day.";
+
+export const EARNINGS_HELPER = "Companies share their results every three months.";
+
+const KIND_LABELS = {
+  price: "Price",
+  earnings: "Earnings",
+  news: "News",
+};
+
+export function updatesFrom(data) {
+  if (!data || !Array.isArray(data.updates)) return [];
+  return data.updates;
+}
+
+export function alertsFrom(data) {
+  if (!data || !Array.isArray(data.alerts)) return [];
+  return data.alerts.filter((alert) => alert && typeof alert === "object");
+}
+
+export function unseenCountFrom(data) {
+  const count = Number(data && data.unseen_count);
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  return Math.floor(count);
+}
+
+export function updatesNavLabel(unseenCount) {
+  const count = unseenCountFrom({ unseen_count: unseenCount });
+  if (count <= 0) return "Updates";
+  return `Updates (${count})`;
+}
+
+export function alertKindLabel(kind) {
+  if (typeof kind !== "string" || !kind) return "Alert";
+  return KIND_LABELS[kind] || kind;
+}
+
+export function newsAlertUrl(alert) {
+  if (!alert || alert.kind !== "news") return "";
+  if (typeof alert.url !== "string") return "";
+  return alert.url.trim();
+}
+
+export function helperStorageKey(kind, userId) {
+  return `fund_alert_helper_${kind}:${userId}`;
+}
+
+export function helperForAlert(alert, alerts, flags) {
+  if (!alert || !flags || flags[alert.kind] !== true) return "";
+  if (!Array.isArray(alerts)) return "";
+  const first = alerts.find((item) => item && item.kind === alert.kind);
+  if (!first || first.id !== alert.id) return "";
+  if (alert.kind === "price") return PRICE_HELPER;
+  if (alert.kind === "earnings") return EARNINGS_HELPER;
+  return "";
+}
+
+export function updatesEmptyCopy({ updates, alerts, hasLikes }) {
+  const updateCount = Array.isArray(updates) ? updates.length : 0;
+  const alertCount = Array.isArray(alerts) ? alerts.length : 0;
+  if (updateCount > 0 || alertCount > 0) return "";
+  if (hasLikes === true) return NO_NEWS_COPY;
+  if (hasLikes === false) return NO_LIKES_COPY;
+  return "";
+}
+
+export function showDailySection({ updates, alerts, hasLikes }) {
+  if (Array.isArray(updates) && updates.length > 0) return true;
+  if (hasLikes === true) return true;
+  if (Array.isArray(alerts) && alerts.length > 0) return true;
+  return false;
+}
+
+export async function claimHelperFlags(userId, alerts, storage) {
+  const flags = { price: false, earnings: false };
+  if (!userId || !storage || !Array.isArray(alerts)) return flags;
+  for (const kind of ["price", "earnings"]) {
+    if (!alerts.some((alert) => alert && alert.kind === kind)) continue;
+    const key = helperStorageKey(kind, userId);
+    const existing = await storage.getItem(key);
+    if (existing === "1") continue;
+    await storage.setItem(key, "1");
+    flags[kind] = true;
+  }
+  return flags;
+}

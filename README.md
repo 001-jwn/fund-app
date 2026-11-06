@@ -548,6 +548,10 @@ A price alert needs a real quote whose time is not in the future, and a change o
 
 `GET /updates?user_id=` still returns `updates` as before. It also returns `alerts` (newest first, at most 50) and `unseen_count`. `POST /alerts/seen` with `{"user_id": "..."}` marks that person's alerts as seen and returns `{"unseen_count": 0}`. Marking them seen does not delete them, so the same event does not come back. Unlike does delete that stock's alerts, and a later like starts the memory over.
 
+On the website and in the iPhone app, the Updates button shows that count when it is above zero, for example `Updates (3)`. It is hidden when the count is 0. The count loads once after you sign in, and again when you open Updates. Opening Updates lists each alert above the daily lines. The card says Alert, the kind (price, earnings, or news), and New when that alert is still unseen. The line is the alert text. A news alert with a link opens that page. After the list loads, the app marks the alerts seen, the count goes back to 0, and the lines stay.
+
+If you have not liked a stock, Updates still says `Like a few stocks and their daily updates will show up here.` If you have likes but there is nothing to show, it says `No big news on your liked stocks right now. We'll flag big price moves, upcoming results and fresh headlines here.` The first time you see a price alert, a line under it says `We flag a liked stock when its price moves 5% or more in a day.` The first earnings alert says `Companies share their results every three months.` Those two notes are saved in this browser, or on this phone, and are not shown again.
+
 Checking alerts does not call Finnhub. If the cache has no quote, no earnings date, or no headline, nothing is added.
 
 ## Optional: run the automated checks
