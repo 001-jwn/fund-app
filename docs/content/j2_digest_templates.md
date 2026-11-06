@@ -5,7 +5,7 @@ Written 2026-11-05 (America/New_York) by the Content Writer, for H2 (John, 2026-
 These templates use placeholders only and never contain a made-up number, date or headline. Every value comes from the J1 digest (cache-only). If a value a line needs is missing, that part is skipped and never filled with a guess.
 
 ## Payload (J1, agreed in the room 2026-11-05)
-`GET /updates` adds `digest: {date, header, intro, items: [{ticker, short_name, line}], more_count, more_line, empty_line}`. `date` is the New York date (YYYY-MM-DD). `items` is always present, with at most 5 entries. There is one item per liked stock that qualifies in a rolling 24-hour window: a cached quote that moved 2% or more either way, or an F2b headline published in that window, or both. Items are ordered biggest move first, then news-only items newest first (not Matches order), so the cap keeps the most notable stocks. The server fills `header`, `intro`, `line`, `more_line` and `empty_line` from the templates below. With no likes, `intro`, `more_line` and `empty_line` are null.
+`GET /updates` adds `digest: {date, header, items: [{ticker, short_name, line}], empty_line}` (shape locked by the Product Lead). `date` is the New York date (YYYY-MM-DD). `items` is always present, with at most 5 entries. There is one item per liked stock that qualifies in a rolling 24-hour window: a cached quote that moved 2% or more either way, or an F2b headline published in that window, or both. Items are ordered biggest move first, then news-only items newest first (not Matches order), so the cap keeps the most notable stocks. The server fills `header`, `line` and `empty_line` from the templates below. `empty_line` is null except when the user has likes and `items` is [].
 
 ## Placeholders
 - `{name}`: `short_name`, falling back to `company_name` (same as G2 and I3).
@@ -16,17 +16,11 @@ These templates use placeholders only and never contain a made-up number, date o
 - `{source}`: the news source name.
 - `{date}`: the headline's date in New York time (not UTC), shown as "Nov 5".
 - `{digest_date}`: `digest.date`, shown as "Thu, Nov 5".
-- `{count}`: the number of items shown (1 to 5).
-- `{more}`: `more_count`, the number of qualifying stocks left out by the cap.
 
 The words "today", "tomorrow" and "yesterday" never appear. Every line carries its own real date, because an item from last night can sit under the next day's `digest.date` (same ruling as I3).
 
 ## Header (`header`)
-1. `For you, {digest_date}`
-
-## Intro (`intro`, only when `items` isn't empty)
-- One item: `1 of your liked stocks has something new.`
-- Several: `{count} of your liked stocks have something new.`
+1. `For you, {digest_date}`, built by the server (for example the shape "For you, Thu, Nov 5").
 
 ## Item lines (`line`, one per item)
 2. Price only, up: `{name} is up {pct}% (as of {quote_date}), at US${price}.`
@@ -36,9 +30,6 @@ The words "today", "tomorrow" and "yesterday" never appear. Every line carries i
 6. Price and news: line 2 or 3, then a space, then `In the news: "{headline}" ({source}, {date}).` Without a source: `In the news: "{headline}" ({date}).`
 
 Lines 2–5 are the G2 lines word for word, so the digest reads like the rest of Updates. The digest never says "Big move". That label stays reserved for alerts (5% or more), and the digest gate is 2%.
-
-## More (`more_line`, only when `more_count` > 0; otherwise null)
-- `+ {more} more in your updates below.`
 
 ## Empty state (`empty_line`, has likes and `items` is [])
 7. `Quiet one: no price moves of 2% or more and no new headlines for your liked stocks in the last day.`
@@ -55,7 +46,6 @@ Lines 2–5 are the G2 lines word for word, so the digest reads like the rest of
 ## Shape example (placeholders, not real data)
 ```
 For you, {digest_date}
-2 of your liked stocks have something new.
 Sony is down {pct}% (as of {quote_date}), at US${price}. In the news: "{headline}" ({source}, {date}).
 In the news for Nvidia: "{headline}" ({source}, {date}).
 ```
