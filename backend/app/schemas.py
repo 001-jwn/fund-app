@@ -78,10 +78,24 @@ class AlertOut(BaseModel):
     url: str | None = None
 
 
+class DigestItemOut(BaseModel):
+    ticker: str
+    short_name: str
+    line: str
+
+
+class DigestOut(BaseModel):
+    date: str
+    header: str
+    items: list[DigestItemOut] = Field(default_factory=list)
+    empty_line: str | None = None
+
+
 class UpdatesOut(BaseModel):
     updates: list[UpdateOut]
     alerts: list[AlertOut] = Field(default_factory=list)
     unseen_count: int = 0
+    digest: DigestOut
 
 
 class AlertsSeenIn(BaseModel):

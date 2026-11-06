@@ -14,6 +14,7 @@ from app.models import Alert, Company, Match, User
 from app.schemas import AlertOut, UpdateOut, UpdatesOut
 from app.services.cards import liked_display_name
 from app.services.catalysts import NEW_YORK, detect_for_user, earnings_alert_is_current
+from app.services.digest import build_digest
 from app.services.updates import build_update
 
 logger = logging.getLogger("fund.updates")
@@ -43,6 +44,7 @@ def get_updates(user_id: str = Query(...), db: Session = Depends(get_db)) -> Upd
     )
 
     updates: list[UpdateOut] = []
+    liked_companies: list[Company] = []
     for match in rows:
         try:
             company = db.get(Company, match.ticker)
@@ -50,6 +52,7 @@ def get_updates(user_id: str = Query(...), db: Session = Depends(get_db)) -> Upd
             continue
         if company is None:
             continue
+        liked_companies.append(company)
         try:
             item = build_update(company)
         except (ArithmeticError, ValueError, TypeError, OverflowError, OSError):
@@ -58,7 +61,13 @@ def get_updates(user_id: str = Query(...), db: Session = Depends(get_db)) -> Upd
             continue
         updates.append(UpdateOut(**item))
     alerts, unseen_count = _alerts_for_user(db, user_id)
-    return UpdatesOut(updates=updates, alerts=alerts, unseen_count=unseen_count)
+    digest = build_digest(liked_companies, has_likes=bool(rows))
+    return UpdatesOut(
+        updates=updates,
+        alerts=alerts,
+        unseen_count=unseen_count,
+        digest=digest,
+    )
 
 
 def _alerts_for_user(db: Session, user_id: str) -> tuple[list[AlertOut], int]:
