@@ -63,7 +63,7 @@ def get_client() -> FinnhubClient:
 
 
 def refresh_passes(tickers: list[str] | None = None, respect_stop: bool = False) -> None:
-    """One full fill: all quotes, then all news, then all profiles."""
+    """One full fill: all quotes, then all news, then all profiles, then calendars."""
     if not should_fetch_live():
         return
     if tickers is None:
@@ -71,10 +71,18 @@ def refresh_passes(tickers: list[str] | None = None, respect_stop: bool = False)
     for phase in PHASES:
         for ticker in tickers:
             if not should_fetch_live():
+                _detect_after_refresh()
                 return
             if respect_stop and _stop.is_set():
+                _detect_after_refresh()
                 return
             _refresh_phase(ticker, phase)
+    if should_fetch_live():
+        for ticker in tickers:
+            if respect_stop and _stop.is_set():
+                break
+            _warm_earnings_calendar(ticker)
+    _detect_after_refresh()
 
 
 def refresh_ticker(ticker: str) -> None:
@@ -152,12 +160,16 @@ def _store_news(ticker: str, picked) -> None:
             company.latest_news_date = None
             company.latest_news_source = None
             company.latest_news_url = None
+            company.latest_news_id = None
+            company.latest_news_unix = None
             return True
         company.latest_news_headline = picked.headline
         company.latest_news_summary = picked.summary
         company.latest_news_date = picked.news_date
         company.latest_news_source = picked.source
         company.latest_news_url = picked.url
+        company.latest_news_id = picked.article_id
+        company.latest_news_unix = picked.published_unix
         return True
 
     _update_company(ticker, apply)
@@ -184,6 +196,94 @@ def _update_company(ticker: str, apply) -> None:
             session.commit()
     except Exception:
         logger.exception("Could not store Finnhub fields for %s", ticker)
+        session.rollback()
+    finally:
+        session.close()
+
+
+def _warm_earnings_calendar(ticker: str) -> None:
+    """Fetch calendar/earnings for one ticker and store it. Failures leave the row."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.models import EarningsCalendar
+
+    ticker = ticker.strip().upper()
+    try:
+        today = datetime.now(ZoneInfo("America/New_York")).date()
+        end = today + timedelta(days=7)
+        with _refresh_lock:
+            payload = get_client().get_earnings_calendar(ticker, today.isoformat(), end.isoformat())
+        picked = _earnings_from_payload(payload, ticker)
+        if picked is None:
+            return
+        report_date, hour = picked
+        if dbmod.SessionLocal is None:
+            return
+        session = dbmod.SessionLocal()
+        try:
+            row = session.get(EarningsCalendar, ticker)
+            if row is None:
+                session.add(
+                    EarningsCalendar(
+                        ticker=ticker,
+                        report_date=report_date,
+                        hour=hour,
+                        fetched_at=utcnow(),
+                    )
+                )
+            else:
+                row.report_date = report_date
+                row.hour = hour
+                row.fetched_at = utcnow()
+            session.commit()
+        except Exception:
+            logger.exception("Could not store earnings calendar for %s", ticker)
+            session.rollback()
+        finally:
+            session.close()
+    except Exception:
+        logger.exception("Finnhub earnings calendar failed for %s", ticker)
+
+
+def _earnings_from_payload(payload, ticker: str) -> tuple[str | None, str | None] | None:
+    """Earliest date for this symbol, or (None, None) when the list is empty.
+
+    None means the payload was not a calendar response, so the row stays missing.
+    """
+    if not isinstance(payload, dict) or not isinstance(payload.get("earningsCalendar"), list):
+        return None
+    best_date: str | None = None
+    best_hour: str | None = None
+    for item in payload["earningsCalendar"]:
+        if not isinstance(item, dict):
+            continue
+        symbol = str(item.get("symbol") or "").strip().upper()
+        if symbol and symbol != ticker:
+            continue
+        raw_date = item.get("date")
+        if not isinstance(raw_date, str) or len(raw_date.strip()) < 10:
+            continue
+        iso = raw_date.strip()[:10]
+        if best_date is None or iso < best_date:
+            best_date = iso
+            hour = item.get("hour")
+            best_hour = hour.strip() if isinstance(hour, str) and hour.strip() else None
+    return best_date, best_hour
+
+
+def _detect_after_refresh() -> None:
+    """Read the database only. A Finnhub failure must not block this."""
+    from app.services.catalysts import detect_for_liked_users
+
+    if dbmod.SessionLocal is None:
+        return
+    session = dbmod.SessionLocal()
+    try:
+        detect_for_liked_users(session)
+        session.commit()
+    except Exception:
+        logger.exception("Catalyst detection after refresh failed")
         session.rollback()
     finally:
         session.close()

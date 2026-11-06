@@ -67,8 +67,29 @@ class UpdateOut(BaseModel):
     news_url: str | None = None
 
 
+class AlertOut(BaseModel):
+    id: int
+    ticker: str
+    short_name: str
+    kind: str
+    line: str
+    created_at: str
+    seen: bool
+    url: str | None = None
+
+
 class UpdatesOut(BaseModel):
     updates: list[UpdateOut]
+    alerts: list[AlertOut] = Field(default_factory=list)
+    unseen_count: int = 0
+
+
+class AlertsSeenIn(BaseModel):
+    user_id: str
+
+
+class AlertsSeenOut(BaseModel):
+    unseen_count: int
 
 
 class HealthOut(BaseModel):

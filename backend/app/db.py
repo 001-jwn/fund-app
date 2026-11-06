@@ -109,6 +109,8 @@ _MISSING_COMPANY_COLUMNS = (
     ("latest_quote_at", "DATETIME"),
     ("latest_news_source", "TEXT"),
     ("latest_news_url", "TEXT"),
+    ("latest_news_id", "TEXT"),
+    ("latest_news_unix", "FLOAT"),
 )
 
 

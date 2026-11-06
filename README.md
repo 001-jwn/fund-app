@@ -540,6 +540,16 @@ The news line uses the headline already chosen for the card. "No recent news abo
 4. Headline, with a source: `In the news for {name}: "{headline}" ({source}, {date}).`
 5. Headline, without a source: `In the news for {name}: "{headline}" ({date}).`
 
+## Alerts
+
+A liked stock can also raise a short alert for a big price move, an earnings date, or a news headline. The first time the app sees valid data for that stock, it only remembers it. It does not alert yet. After that, a new move, a new earnings date, or a new matching headline is listed once.
+
+A price alert needs a real quote whose time is not in the future, and a change of at least 5 percent. The line names that quote's New York date, such as Nov 6, and never says "today." An earnings alert is only for a report date that is today or tomorrow in New York, but the line writes the weekday and date, such as Thu, Nov 6, and never says "today" or "tomorrow." It adds ", before the market opens" or ", after the market closes" only when the calendar hour is bmo or amc. A news alert uses the same headline already chosen for the card, only when that story is less than a day old and the headline uses one of a fixed list of words such as earnings, guidance, or CEO. If a fact the line needs is missing, that alert is left out.
+
+`GET /updates?user_id=` still returns `updates` as before. It also returns `alerts` (newest first, at most 50) and `unseen_count`. `POST /alerts/seen` with `{"user_id": "..."}` marks that person's alerts as seen and returns `{"unseen_count": 0}`. Marking them seen does not delete them, so the same event does not come back. Unlike does delete that stock's alerts, and a later like starts the memory over.
+
+Checking alerts does not call Finnhub. If the cache has no quote, no earnings date, or no headline, nothing is added.
+
 ## Optional: run the automated checks
 
 You can skip this. It is for checking that the app's rules still hold. Use a new terminal in the `fund-app` folder, after step 6. Do not stop the backend if it is already running. This check uses its own temporary database.
@@ -556,4 +566,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `58 passed`.
+The last line should include `68 passed`.

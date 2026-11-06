@@ -301,6 +301,11 @@ def test_refresh_stores_live_fields_and_keeps_seed_quarter_date(client, monkeypa
     monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", fake_quote)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", fake_news)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", fake_profile)
+    monkeypatch.setattr(
+        live_mod.FinnhubClient,
+        "get_earnings_calendar",
+        lambda *_args, **_kwargs: {"earningsCalendar": []},
+    )
     live_mod.refresh_passes(["NVDA"])
 
     user_id = _onboard(client, ["gaming"])
@@ -354,6 +359,11 @@ def test_refresh_failure_does_not_invent_numbers(client, monkeypatch, tmp_path):
     monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", explode)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", explode)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", explode)
+    monkeypatch.setattr(
+        live_mod.FinnhubClient,
+        "get_earnings_calendar",
+        lambda *_args, **_kwargs: {"earningsCalendar": []},
+    )
     live_mod.refresh_passes(["TSLA"])
 
     user_id = _onboard(client, ["automobile"])
@@ -484,6 +494,11 @@ def test_no_matching_news_uses_the_empty_message(client, monkeypatch, tmp_path):
     monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", fake_quote)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", fake_news)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", fake_profile)
+    monkeypatch.setattr(
+        live_mod.FinnhubClient,
+        "get_earnings_calendar",
+        lambda *_args, **_kwargs: {"earningsCalendar": []},
+    )
     live_mod.refresh_passes(["AMD", "NVDA"])
 
     assert calls == [

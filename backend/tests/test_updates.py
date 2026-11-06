@@ -310,6 +310,11 @@ def test_refresh_persists_quote_time_source_and_url(client, monkeypatch, tmp_pat
     monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", fake_quote)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", fake_news)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", fake_profile)
+    monkeypatch.setattr(
+        live_mod.FinnhubClient,
+        "get_earnings_calendar",
+        lambda *_args, **_kwargs: {"earningsCalendar": []},
+    )
     live_mod.refresh_passes(["NVDA"])
 
     from app.db import SessionLocal
@@ -440,6 +445,11 @@ def _refresh_quote(monkeypatch, live_mod, ticker, quote):
     monkeypatch.setattr(live_mod.FinnhubClient, "get_quote", fake_quote)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_company_news", fake_news)
     monkeypatch.setattr(live_mod.FinnhubClient, "get_profile", fake_profile)
+    monkeypatch.setattr(
+        live_mod.FinnhubClient,
+        "get_earnings_calendar",
+        lambda *_args, **_kwargs: {"earningsCalendar": []},
+    )
     live_mod._client = None
     live_mod.refresh_passes([ticker])
 

@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import json
+import logging
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Company, Match, User
-from app.schemas import UpdateOut, UpdatesOut
+from app.models import Alert, Company, Match, User
+from app.schemas import AlertOut, UpdateOut, UpdatesOut
+from app.services.cards import liked_display_name
+from app.services.catalysts import NEW_YORK, detect_for_user, earnings_alert_is_current
 from app.services.updates import build_update
+
+logger = logging.getLogger("fund.updates")
+ALERT_CAP = 50
 
 router = APIRouter()
 
@@ -18,6 +27,13 @@ def get_updates(user_id: str = Query(...), db: Session = Depends(get_db)) -> Upd
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found.")
+
+    try:
+        detect_for_user(db, user_id)
+        db.commit()
+    except Exception:
+        logger.exception("Catalyst detection failed for %s", user_id)
+        db.rollback()
 
     rows = (
         db.query(Match)
@@ -41,4 +57,47 @@ def get_updates(user_id: str = Query(...), db: Session = Depends(get_db)) -> Upd
         if item is None:
             continue
         updates.append(UpdateOut(**item))
-    return UpdatesOut(updates=updates)
+    alerts, unseen_count = _alerts_for_user(db, user_id)
+    return UpdatesOut(updates=updates, alerts=alerts, unseen_count=unseen_count)
+
+
+def _alerts_for_user(db: Session, user_id: str) -> tuple[list[AlertOut], int]:
+    liked = {row[0] for row in db.query(Match.ticker).filter(Match.user_id == user_id).all()}
+    if not liked:
+        return [], 0
+    rows = (
+        db.query(Alert)
+        .filter(Alert.user_id == user_id, Alert.ticker.in_(liked))
+        .order_by(Alert.created_at.desc(), Alert.id.desc())
+        .all()
+    )
+    today_et = datetime.now(NEW_YORK).date()
+    rows = [row for row in rows if earnings_alert_is_current(row.kind, row.facts, today_et)]
+    unseen = sum(1 for row in rows if not row.seen)
+    alerts: list[AlertOut] = []
+    for row in rows[:ALERT_CAP]:
+        company = db.get(Company, row.ticker)
+        if company is None:
+            continue
+        url = None
+        if row.kind == "news":
+            try:
+                url = json.loads(row.facts or "{}").get("url")
+            except json.JSONDecodeError:
+                url = None
+        created = row.created_at
+        if created is not None and created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        alerts.append(
+            AlertOut(
+                id=row.id,
+                ticker=row.ticker,
+                short_name=liked_display_name(company),
+                kind=row.kind,
+                line=row.line,
+                created_at=created.isoformat() if created is not None else "",
+                seen=bool(row.seen),
+                url=url if isinstance(url, str) and url.strip() else None,
+            )
+        )
+    return alerts, unseen

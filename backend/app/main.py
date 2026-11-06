@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import db as dbmod
 from app.db import configure_engine, init_db
-from app.routers import cards, matches, onboarding, swipes, updates
+from app.routers import alerts, cards, matches, onboarding, swipes, updates
 from app.schemas import HealthOut
 from app.services.live import finnhub_mode_label, start_refresher, stop_refresher
 
@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(swipes.router)
     app.include_router(matches.router)
     app.include_router(updates.router)
+    app.include_router(alerts.router)
 
     @app.get("/health", response_model=HealthOut)
     def health() -> HealthOut:
