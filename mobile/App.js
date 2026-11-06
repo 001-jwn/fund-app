@@ -16,12 +16,25 @@ import {
   View,
 } from "react-native";
 import {
+  alertsFrom,
+  alertKindLabel,
+  claimHelperFlags,
+  helperForAlert,
+  newsAlertUrl,
+  showDailySection,
+  unseenCountFrom,
+  updatesEmptyCopy,
+  updatesFrom,
+  updatesNavLabel,
+} from "./alertView";
+import {
   dislikeCompany,
   getCards,
   getHealth,
   getMatches,
   getUpdates,
   likeCompany,
+  markAlertsSeen,
   onboard,
   unlikeCompany,
 } from "./api";
@@ -76,6 +89,36 @@ function BecauseLiked({ card }) {
   const text = becauseLikedText(card);
   if (!text) return null;
   return <Text style={styles.row}>{text}</Text>;
+}
+
+function AlertCard({ alert, helper, onLinkError }) {
+  const url = newsAlertUrl(alert);
+  const line = typeof alert.line === "string" ? alert.line : "";
+  const unseen = alert.seen !== true;
+  const lineStyle = [styles.row, unseen ? styles.unseen : null, url ? styles.link : null];
+  return (
+    <View style={styles.alertCard}>
+      <Text style={styles.alertLabel}>
+        Alert · {alertKindLabel(alert.kind)}
+        {unseen ? " · New" : ""}
+      </Text>
+      <Text style={styles.row}>{alert.ticker}</Text>
+      {url ? (
+        <Pressable
+          onPress={() => {
+            Linking.openURL(url).catch(() => {
+              onLinkError("Could not open that link.");
+            });
+          }}
+        >
+          <Text style={lineStyle}>{line}</Text>
+        </Pressable>
+      ) : (
+        <Text style={lineStyle}>{line}</Text>
+      )}
+      {helper ? <Text style={styles.helper}>{helper}</Text> : null}
+    </View>
+  );
 }
 
 function CompanyFacts({ card, showNews }) {
@@ -178,7 +221,14 @@ export default function App() {
   const [queue, setQueue] = useState([]);
   const [matches, setMatches] = useState([]);
   const [updates, setUpdates] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [hasLikes, setHasLikes] = useState(null);
+  const [helpers, setHelpers] = useState({ price: false, earnings: false });
   const [loading, setLoading] = useState(false);
+  const updatesFetchId = useRef(0);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [finnhub, setFinnhub] = useState("off");
@@ -274,25 +324,89 @@ export default function App() {
   }, [ready, screen, userId]);
 
   useEffect(() => {
-    if (!ready || screen !== "updates" || !userId) return undefined;
+    if (!ready || !userId) return undefined;
+    const fetchId = ++updatesFetchId.current;
     let cancelled = false;
-    setLoading(true);
-    setError("");
     getUpdates(userId)
       .then((data) => {
-        if (!cancelled) setUpdates(data.updates || []);
+        if (cancelled || fetchId !== updatesFetchId.current || userIdRef.current !== userId) return;
+        setUnseenCount(unseenCountFrom(data));
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || fetchId !== updatesFetchId.current || userIdRef.current !== userId) return;
+        if (err.status === 404) {
+          forgetUser("That session was not found. Pick your interests again.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, userId]);
+
+  useEffect(() => {
+    if (!ready || screen !== "updates" || !userId) return undefined;
+    const fetchId = ++updatesFetchId.current;
+    let cancelled = false;
+    const latest = () => fetchId === updatesFetchId.current && userIdRef.current === userId;
+    setLoading(true);
+    setError("");
+    (async () => {
+      try {
+        const data = await getUpdates(userId);
+        if (!latest()) return;
+        const nextUpdates = updatesFrom(data);
+        const nextAlerts = alertsFrom(data);
+        const unseen = unseenCountFrom(data);
+        let likes = nextUpdates.length > 0 || nextAlerts.length > 0 ? true : null;
+        if (likes === null) {
+          try {
+            const matchData = await getMatches(userId);
+            if (!latest()) return;
+            likes = Array.isArray(matchData.matches) && matchData.matches.length > 0;
+          } catch (err) {
+            if (!latest()) return;
+            if (err.status === 404) {
+              forgetUser("That session was not found. Pick your interests again.");
+              return;
+            }
+            setError(err.message);
+          }
+        }
+        let nextHelpers = { price: false, earnings: false };
+        if (!cancelled) {
+          nextHelpers = await claimHelperFlags(userId, nextAlerts, AsyncStorage);
+        }
+        if (!latest()) return;
+        setUpdates(nextUpdates);
+        setAlerts(nextAlerts);
+        setHasLikes(likes);
+        setHelpers(nextHelpers);
+        setUnseenCount(unseen);
+        if (unseen > 0 && !cancelled) {
+          try {
+            const seen = await markAlertsSeen(userId);
+            if (!latest()) return;
+            setUnseenCount(unseenCountFrom(seen));
+          } catch (err) {
+            if (!latest()) return;
+            if (err.status === 404) {
+              forgetUser("That session was not found. Pick your interests again.");
+              return;
+            }
+            setError(err.message || "Could not mark alerts as seen.");
+          }
+        }
+      } catch (err) {
+        if (!latest()) return;
         if (err.status === 404) {
           forgetUser("That session was not found. Pick your interests again.");
         } else {
           setError(err.message);
         }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      } finally {
+        if (!cancelled && latest()) setLoading(false);
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -323,6 +437,11 @@ export default function App() {
     setQueue([]);
     setMatches([]);
     setUpdates([]);
+    setAlerts([]);
+    setUnseenCount(0);
+    setHasLikes(null);
+    setHelpers({ price: false, earnings: false });
+    setLoading(false);
     setPicked([]);
     setScreen("onboarding");
     setError(message || "");
@@ -356,6 +475,10 @@ export default function App() {
     try {
       const result = await onboard(picked);
       await AsyncStorage.setItem(USER_KEY, result.user_id);
+      setAlerts([]);
+      setUnseenCount(0);
+      setHasLikes(null);
+      setHelpers({ price: false, earnings: false });
       setUserId(result.user_id);
       setQueue([]);
       setScreen("swipe");
@@ -422,7 +545,7 @@ export default function App() {
             <View style={styles.nav}>
               <Button title="Swipe" onPress={() => setScreen("swipe")} />
               <Button title="Matches" onPress={() => setScreen("matches")} />
-              <Button title="Updates" onPress={() => setScreen("updates")} />
+              <Button title={updatesNavLabel(unseenCount)} onPress={() => setScreen("updates")} />
               <Button title="Start over" onPress={askReset} />
             </View>
           ) : null}
@@ -501,38 +624,56 @@ export default function App() {
             <View>
               <Text style={styles.heading}>Updates</Text>
               {loading ? <Text>Loading updates...</Text> : null}
-              {!loading && updates.length === 0 ? (
-                <Text>Like a few stocks and their daily updates will show up here.</Text>
+              {!loading && alerts.length > 0 ? (
+                <View>
+                  <Text style={styles.sectionLabel}>Alerts</Text>
+                  {alerts.map((alert, index) => (
+                    <AlertCard
+                      key={`${alert.id ?? "alert"}-${index}`}
+                      alert={alert}
+                      helper={helperForAlert(alert, alerts, helpers)}
+                      onLinkError={setError}
+                    />
+                  ))}
+                </View>
               ) : null}
-              {updates.map((update) => {
-                const lines = Array.isArray(update.lines) ? update.lines : [];
-                const newsUrl = typeof update.news_url === "string" && update.news_url ? update.news_url : null;
-                return (
-                  <View style={styles.card} key={update.ticker}>
-                    <Text style={styles.company}>{update.ticker}</Text>
-                    {lines.map((line, index) => {
-                      const linked = Boolean(newsUrl) && index === lines.length - 1;
-                      if (linked) {
-                        return (
-                          <Pressable
-                            key={`${update.ticker}-${index}`}
-                            onPress={() => {
-                              Linking.openURL(newsUrl).catch(() => {
-                                setError("Could not open that link.");
-                              });
-                            }}
-                          >
-                            <Text style={[styles.row, styles.link]}>{line}</Text>
-                          </Pressable>
-                        );
-                      }
-                      return (
-                        <Text style={styles.row} key={`${update.ticker}-${index}`}>{line}</Text>
-                      );
-                    })}
-                  </View>
-                );
-              })}
+              {!loading && updatesEmptyCopy({ updates, alerts, hasLikes }) ? (
+                <Text style={styles.row}>{updatesEmptyCopy({ updates, alerts, hasLikes })}</Text>
+              ) : null}
+              {!loading && showDailySection({ updates, alerts, hasLikes }) ? (
+                <View>
+                  <Text style={styles.sectionLabel}>Daily updates</Text>
+                  {updates.map((update) => {
+                    const lines = Array.isArray(update.lines) ? update.lines : [];
+                    const newsUrl = typeof update.news_url === "string" && update.news_url ? update.news_url : null;
+                    return (
+                      <View style={styles.card} key={update.ticker}>
+                        <Text style={styles.company}>{update.ticker}</Text>
+                        {lines.map((line, index) => {
+                          const linked = Boolean(newsUrl) && index === lines.length - 1;
+                          if (linked) {
+                            return (
+                              <Pressable
+                                key={`${update.ticker}-${index}`}
+                                onPress={() => {
+                                  Linking.openURL(newsUrl).catch(() => {
+                                    setError("Could not open that link.");
+                                  });
+                                }}
+                              >
+                                <Text style={[styles.row, styles.link]}>{line}</Text>
+                              </Pressable>
+                            );
+                          }
+                          return (
+                            <Text style={styles.row} key={`${update.ticker}-${index}`}>{line}</Text>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
             </View>
           ) : null}
         </ScrollView>
@@ -560,6 +701,30 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 16,
     marginBottom: 8,
+  },
+  sectionLabel: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 16,
+  },
+  alertCard: {
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "#111",
+    backgroundColor: "#ffe9c7",
+    padding: 16,
+    marginTop: 12,
+  },
+  alertLabel: {
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  unseen: {
+    fontWeight: "700",
+  },
+  helper: {
+    marginVertical: 8,
+    fontStyle: "italic",
   },
   nav: {
     marginTop: 12,

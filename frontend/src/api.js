@@ -77,3 +77,10 @@ export function getUpdates(userId) {
   const params = new URLSearchParams({ user_id: userId });
   return request(`/updates?${params.toString()}`);
 }
+
+export function markAlertsSeen(userId) {
+  return request("/alerts/seen", {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId }),
+  });
+}

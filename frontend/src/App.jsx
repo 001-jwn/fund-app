@@ -1,4 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  alertsFrom,
+  alertKindLabel,
+  claimHelperFlags,
+  helperForAlert,
+  newsAlertUrl,
+  showDailySection,
+  unseenCountFrom,
+  updatesEmptyCopy,
+  updatesFrom,
+  updatesNavLabel,
+} from "./alertView";
 import {
   dislikeCompany,
   getCards,
@@ -6,6 +18,7 @@ import {
   getMatches,
   getUpdates,
   likeCompany,
+  markAlertsSeen,
   onboard,
   unlikeCompany,
 } from "./api";
@@ -51,6 +64,29 @@ function BecauseLiked({ card }) {
   return <p className="row">{text}</p>;
 }
 
+function AlertCard({ alert, helper }) {
+  const url = newsAlertUrl(alert);
+  const line = typeof alert.line === "string" ? alert.line : "";
+  const unseen = alert.seen !== true;
+  return (
+    <article className="card alert">
+      <p className="alert-label">
+        Alert · {alertKindLabel(alert.kind)}
+        {unseen ? " · New" : ""}
+      </p>
+      <p className="row">{alert.ticker}</p>
+      {url ? (
+        <p className={unseen ? "row unseen" : "row"}>
+          <a href={url} target="_blank" rel="noopener noreferrer">{line}</a>
+        </p>
+      ) : (
+        <p className={unseen ? "row unseen" : "row"}>{line}</p>
+      )}
+      {helper ? <p className="helper">{helper}</p> : null}
+    </article>
+  );
+}
+
 export default function App() {
   const [screen, setScreen] = useState(() =>
     localStorage.getItem(USER_KEY) ? "swipe" : "onboarding"
@@ -60,7 +96,14 @@ export default function App() {
   const [queue, setQueue] = useState([]);
   const [matches, setMatches] = useState([]);
   const [updates, setUpdates] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [hasLikes, setHasLikes] = useState(null);
+  const [helpers, setHelpers] = useState({ price: false, earnings: false });
   const [loading, setLoading] = useState(false);
+  const updatesFetchId = useRef(0);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [finnhub, setFinnhub] = useState("off");
@@ -132,25 +175,89 @@ export default function App() {
   }, [screen, userId]);
 
   useEffect(() => {
-    if (screen !== "updates" || !userId) return undefined;
+    if (!userId) return undefined;
+    const fetchId = ++updatesFetchId.current;
     let cancelled = false;
-    setLoading(true);
-    setError("");
     getUpdates(userId)
       .then((data) => {
-        if (!cancelled) setUpdates(data.updates || []);
+        if (cancelled || fetchId !== updatesFetchId.current || userIdRef.current !== userId) return;
+        setUnseenCount(unseenCountFrom(data));
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || fetchId !== updatesFetchId.current || userIdRef.current !== userId) return;
+        if (err.status === 404) {
+          forgetUser("That session was not found. Pick your interests again.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (screen !== "updates" || !userId) return undefined;
+    const fetchId = ++updatesFetchId.current;
+    let cancelled = false;
+    const latest = () => fetchId === updatesFetchId.current && userIdRef.current === userId;
+    setLoading(true);
+    setError("");
+    (async () => {
+      try {
+        const data = await getUpdates(userId);
+        if (!latest()) return;
+        const nextUpdates = updatesFrom(data);
+        const nextAlerts = alertsFrom(data);
+        const unseen = unseenCountFrom(data);
+        let likes = nextUpdates.length > 0 || nextAlerts.length > 0 ? true : null;
+        if (likes === null) {
+          try {
+            const matchData = await getMatches(userId);
+            if (!latest()) return;
+            likes = Array.isArray(matchData.matches) && matchData.matches.length > 0;
+          } catch (err) {
+            if (!latest()) return;
+            if (err.status === 404) {
+              forgetUser("That session was not found. Pick your interests again.");
+              return;
+            }
+            setError(err.message);
+          }
+        }
+        let nextHelpers = { price: false, earnings: false };
+        if (!cancelled) {
+          nextHelpers = await claimHelperFlags(userId, nextAlerts, localStorage);
+        }
+        if (!latest()) return;
+        setUpdates(nextUpdates);
+        setAlerts(nextAlerts);
+        setHasLikes(likes);
+        setHelpers(nextHelpers);
+        setUnseenCount(unseen);
+        if (unseen > 0 && !cancelled) {
+          try {
+            const seen = await markAlertsSeen(userId);
+            if (!latest()) return;
+            setUnseenCount(unseenCountFrom(seen));
+          } catch (err) {
+            if (!latest()) return;
+            if (err.status === 404) {
+              forgetUser("That session was not found. Pick your interests again.");
+              return;
+            }
+            setError(err.message || "Could not mark alerts as seen.");
+          }
+        }
+      } catch (err) {
+        if (!latest()) return;
         if (err.status === 404) {
           forgetUser("That session was not found. Pick your interests again.");
         } else {
           setError(err.message);
         }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      } finally {
+        if (!cancelled && latest()) setLoading(false);
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -181,6 +288,11 @@ export default function App() {
     setQueue([]);
     setMatches([]);
     setUpdates([]);
+    setAlerts([]);
+    setUnseenCount(0);
+    setHasLikes(null);
+    setHelpers({ price: false, earnings: false });
+    setLoading(false);
     setPicked([]);
     setConfirmReset(false);
     setScreen("onboarding");
@@ -215,6 +327,10 @@ export default function App() {
     try {
       const result = await onboard(picked);
       localStorage.setItem(USER_KEY, result.user_id);
+      setAlerts([]);
+      setUnseenCount(0);
+      setHasLikes(null);
+      setHelpers({ price: false, earnings: false });
       setUserId(result.user_id);
       setQueue([]);
       setScreen("swipe");
@@ -269,7 +385,7 @@ export default function App() {
         <nav>
           <button type="button" onClick={() => setScreen("swipe")}>Swipe</button>
           <button type="button" onClick={() => setScreen("matches")}>Matches</button>
-          <button type="button" onClick={() => setScreen("updates")}>Updates</button>
+          <button type="button" onClick={() => setScreen("updates")}>{updatesNavLabel(unseenCount)}</button>
           {confirmReset ? (
             <div>
               <p>Start over? This clears your interests and likes.</p>
@@ -373,31 +489,48 @@ export default function App() {
         <section>
           <h2>Updates</h2>
           {loading ? <p>Loading updates...</p> : null}
-          {!loading && updates.length === 0 ? (
-            <p>Like a few stocks and their daily updates will show up here.</p>
+          {!loading && alerts.length > 0 ? (
+            <div>
+              <h3>Alerts</h3>
+              {alerts.map((alert, index) => (
+                <AlertCard
+                  key={`${alert.id ?? "alert"}-${index}`}
+                  alert={alert}
+                  helper={helperForAlert(alert, alerts, helpers)}
+                />
+              ))}
+            </div>
           ) : null}
-          {updates.map((update) => {
-            const lines = Array.isArray(update.lines) ? update.lines : [];
-            const newsUrl = typeof update.news_url === "string" && update.news_url ? update.news_url : null;
-            return (
-              <article className="card" key={update.ticker}>
-                <h3>{update.ticker}</h3>
-                {lines.map((line, index) => {
-                  const linked = Boolean(newsUrl) && index === lines.length - 1;
-                  if (linked) {
-                    return (
-                      <p className="row" key={`${update.ticker}-${index}`}>
-                        <a href={newsUrl} target="_blank" rel="noopener noreferrer">{line}</a>
-                      </p>
-                    );
-                  }
-                  return (
-                    <p className="row" key={`${update.ticker}-${index}`}>{line}</p>
-                  );
-                })}
-              </article>
-            );
-          })}
+          {!loading && updatesEmptyCopy({ updates, alerts, hasLikes }) ? (
+            <p>{updatesEmptyCopy({ updates, alerts, hasLikes })}</p>
+          ) : null}
+          {!loading && showDailySection({ updates, alerts, hasLikes }) ? (
+            <div>
+              <h3>Daily updates</h3>
+              {updates.map((update) => {
+                const lines = Array.isArray(update.lines) ? update.lines : [];
+                const newsUrl = typeof update.news_url === "string" && update.news_url ? update.news_url : null;
+                return (
+                  <article className="card" key={update.ticker}>
+                    <h3>{update.ticker}</h3>
+                    {lines.map((line, index) => {
+                      const linked = Boolean(newsUrl) && index === lines.length - 1;
+                      if (linked) {
+                        return (
+                          <p className="row" key={`${update.ticker}-${index}`}>
+                            <a href={newsUrl} target="_blank" rel="noopener noreferrer">{line}</a>
+                          </p>
+                        );
+                      }
+                      return (
+                        <p className="row" key={`${update.ticker}-${index}`}>{line}</p>
+                      );
+                    })}
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </main>
