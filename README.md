@@ -540,6 +540,12 @@ The news line uses the headline already chosen for the card. "No recent news abo
 4. Headline, with a source: `In the news for {name}: "{headline}" ({source}, {date}).`
 5. Headline, without a source: `In the news for {name}: "{headline}" ({date}).`
 
+## For you
+
+`GET /updates` also returns a `digest` for the stocks you already liked. It looks at the last day only, using prices and headlines already saved. It does not call Finnhub.
+
+The header is `For you,` plus the New York date, such as `Thu, Nov 5`. Each stock appears at most once. It is included when its price moved 2 percent or more in that day, or it has a headline from that day, or both. The biggest moves come first. Headlines with no price move come after, newest first. At most five stocks are listed. If you have likes but nothing moved or made news, the digest says `Quiet one: no price moves of 2% or more and no new headlines for your liked stocks in the last day.` If you have not liked anything, that sentence is left out.
+
 ## Alerts
 
 A liked stock can also raise a short alert for a big price move, an earnings date, or a news headline. The first time the app sees valid data for that stock, it only remembers it. It does not alert yet. After that, a new move, a new earnings date, or a new matching headline is listed once.
@@ -570,4 +576,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `68 passed`.
+The last line should include `73 passed`.
