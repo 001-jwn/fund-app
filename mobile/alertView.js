@@ -11,6 +11,14 @@ export const PRICE_HELPER =
 
 export const EARNINGS_HELPER = "Companies share their results every three months.";
 
+export const SEC_FILING_HELPER =
+  "An SEC filing is a report a company must send to the US regulator, the Securities and Exchange Commission.";
+
+export const OUTLOOK_HELPER =
+  "An outlook is the company's own estimate of what it expects. It is not a promise.";
+
+export const FILING_LINK_LABEL = "Read the filing";
+
 const KIND_LABELS = {
   price: "Price",
   earnings: "Earnings",
@@ -85,6 +93,30 @@ export function filingsFrom(data) {
     rows.push({ name, line: item.line, url });
   }
   return rows;
+}
+
+// Shown on every render. Nothing is stored. The SEC line sits under the
+// heading when any row is visible. The outlook line sits under the first row
+// whose sentence contains the lowercase substring "outlook".
+export function filingHelpers(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  let outlookIndex = -1;
+  for (let index = 0; index < list.length; index += 1) {
+    const row = list[index];
+    const line = row && row.line;
+    if (typeof line === "string" && line.includes("outlook")) {
+      outlookIndex = index;
+      break;
+    }
+  }
+  if (list.length === 0) {
+    return { sec: "", outlook: "", outlookIndex: -1 };
+  }
+  return {
+    sec: SEC_FILING_HELPER,
+    outlook: outlookIndex >= 0 ? OUTLOOK_HELPER : "",
+    outlookIndex,
+  };
 }
 
 // What the Updates tab shows. digest is the result of digestSectionFrom.

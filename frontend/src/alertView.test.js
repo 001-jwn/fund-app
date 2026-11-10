@@ -14,6 +14,10 @@ import {
   newsAlertUrl,
   showDailySection,
   unseenCountFrom,
+  FILING_LINK_LABEL,
+  OUTLOOK_HELPER,
+  SEC_FILING_HELPER,
+  filingHelpers,
   filingsFrom,
   updatesEmptyCopy,
   updatesFeed,
@@ -493,11 +497,66 @@ test("the clients pass filings through and do not format a filing date", () => {
     assert.equal(source.includes(".sort("), false);
   }
   assert.match(webFeed, /target="_blank"/);
-  assert.match(webFeed, /rel="noopener/);
+  assert.match(webFeed, /rel="noopener noreferrer"/);
+  assert.match(webFeed, /FILING_LINK_LABEL/);
   assert.match(phoneFeed, /Linking\.openURL\(filing\.url\)/);
+  assert.match(phoneFeed, /FILING_LINK_LABEL/);
+  assert.equal(webFeed.includes("SEC filing</a>"), false);
+  assert.equal(phoneFeed.includes(">SEC filing<"), false);
   const filingsFn = view.slice(view.indexOf("export function filingsFrom"), view.indexOf("export function updatesFeed"));
   assert.equal(filingsFn.includes("Date"), false);
   assert.equal(filingsFn.includes("new "), false);
+});
+
+test("filing helpers use the K3 lines and are not stored", () => {
+  const doc = fs.readFileSync(new URL("../../docs/content/k3_8k_templates.md", import.meta.url), "utf8");
+  assert.equal(FILING_LINK_LABEL, "Read the filing");
+  assert.equal(doc.includes(`\`${SEC_FILING_HELPER}\``), true);
+  assert.equal(doc.includes(`\`${OUTLOOK_HELPER}\``), true);
+  assert.equal(doc.includes(`"${FILING_LINK_LABEL}"`), true);
+  const view = fs.readFileSync(new URL("./alertView.js", import.meta.url), "utf8");
+  const helperFn = view.slice(
+    view.indexOf("export function filingHelpers"),
+    view.indexOf("export function updatesFeed")
+  );
+  assert.equal(helperFn.includes("localStorage"), false);
+  assert.equal(helperFn.includes("AsyncStorage"), false);
+  assert.equal(helperFn.includes("setItem"), false);
+});
+
+test("the SEC helper sits under a non-empty list and the outlook helper under the first outlook row", () => {
+  const deal = "AMD reported a major deal in an SEC filing on Nov 1. The filing has the details.";
+  const capital = "Sony raised its Outlook for the next quarter, according to an SEC filing on Nov 3.";
+  const earlier = "NVIDIA confirmed its earlier outlook, according to an SEC filing on Nov 5.";
+  const later = "AMD updated its outlook for the full year, according to an SEC filing on Nov 4.";
+  const rows = filingsFrom({
+    filings: [
+      { ticker: "AMD", short_name: "AMD", line: deal, filing_url: AMD_URL },
+      { ticker: "SONY", short_name: "Sony", line: capital, filing_url: "https://example.com/sony" },
+      { ticker: "NVDA", short_name: "NVIDIA", line: earlier, filing_url: NVDA_URL },
+      { ticker: "AMD", short_name: "AMD", line: later, filing_url: AMD_URL },
+    ],
+  });
+  const notes = filingHelpers(rows);
+  assert.equal(notes.sec, SEC_FILING_HELPER);
+  assert.equal(notes.outlook, OUTLOOK_HELPER);
+  assert.equal(notes.outlookIndex, 2);
+  assert.equal(rows[notes.outlookIndex].line, earlier);
+  assert.equal(rows.filter((row) => row.line.includes("outlook")).length, 2);
+
+  const noOutlook = filingHelpers(filingsFrom({
+    filings: [{ ticker: "NVDA", short_name: "NVIDIA", line: NVDA_FILING, filing_url: NVDA_URL }],
+  }));
+  assert.equal(noOutlook.sec, SEC_FILING_HELPER);
+  assert.equal(noOutlook.outlook, "");
+  assert.equal(noOutlook.outlookIndex, -1);
+
+  for (const rows of [[], filingsFrom(null), filingsFrom({ filings: null }), filingsFrom({ filings: [] })]) {
+    const empty = filingHelpers(rows);
+    assert.equal(empty.sec, "");
+    assert.equal(empty.outlook, "");
+    assert.equal(empty.outlookIndex, -1);
+  }
 });
 
 test("helper flags are stored once per user", async () => {

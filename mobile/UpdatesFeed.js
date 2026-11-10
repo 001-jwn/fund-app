@@ -1,6 +1,8 @@
 import { Linking, Pressable, Text, View } from "react-native";
 import {
+  FILING_LINK_LABEL,
   alertKindLabel,
+  filingHelpers,
   helperForAlert,
   newsAlertUrl,
   updatesFeed,
@@ -66,7 +68,7 @@ function DailyCard({ update, onLinkError, styles }) {
   );
 }
 
-function FilingCard({ filing, onLinkError, styles }) {
+function FilingCard({ filing, outlook, onLinkError, styles }) {
   return (
     <View style={styles.card}>
       {filing.name ? <Text style={styles.company}>{filing.name}</Text> : null}
@@ -79,9 +81,10 @@ function FilingCard({ filing, onLinkError, styles }) {
             });
           }}
         >
-          <Text style={[styles.row, styles.link]}>SEC filing</Text>
+          <Text style={[styles.row, styles.link]}>{FILING_LINK_LABEL}</Text>
         </Pressable>
       ) : null}
+      {outlook ? <Text style={styles.helper}>{outlook}</Text> : null}
     </View>
   );
 }
@@ -97,6 +100,7 @@ export default function UpdatesFeed({
   onLinkError,
 }) {
   const feed = updatesFeed({ updates, alerts, hasLikes, digest, filings });
+  const filingNotes = filingHelpers(feed.filings);
   return (
     <View>
       {feed.digest.map((block, index) =>
@@ -124,10 +128,12 @@ export default function UpdatesFeed({
       {feed.filings.length > 0 ? (
         <View>
           <Text style={styles.sectionLabel}>SEC filings</Text>
+          {filingNotes.sec ? <Text style={styles.helper}>{filingNotes.sec}</Text> : null}
           {feed.filings.map((filing, index) => (
             <FilingCard
               key={`filing-${index}`}
               filing={filing}
+              outlook={index === filingNotes.outlookIndex ? filingNotes.outlook : ""}
               onLinkError={onLinkError}
               styles={styles}
             />

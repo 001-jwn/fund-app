@@ -6,8 +6,11 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
+  FILING_LINK_LABEL,
   NO_LIKES_COPY,
   NO_NEWS_COPY,
+  OUTLOOK_HELPER,
+  SEC_FILING_HELPER,
   digestSectionFrom,
 } from "./alertView.js";
 
@@ -139,6 +142,10 @@ function assertQuiet(lines) {
   assert.equal(lines.includes(NO_NEWS_COPY), false);
   assert.equal(lines.includes("Daily updates"), false);
   assert.equal(lines.includes("Alerts"), false);
+  assert.equal(lines.includes("SEC filings"), false);
+  assert.equal(lines.includes(SEC_FILING_HELPER), false);
+  assert.equal(lines.includes(OUTLOOK_HELPER), false);
+  assert.equal(lines.includes(FILING_LINK_LABEL), false);
 }
 
 function assertNoLikes(lines) {
@@ -147,6 +154,9 @@ function assertNoLikes(lines) {
   assert.equal(lines.includes(HEADER), false);
   assert.equal(lines.includes("Quiet one:"), false);
   assert.equal(lines.includes("Daily updates"), false);
+  assert.equal(lines.includes("SEC filings"), false);
+  assert.equal(lines.includes(SEC_FILING_HELPER), false);
+  assert.equal(lines.includes(OUTLOOK_HELPER), false);
 }
 
 test("website and iPhone Updates feeds render the same quiet, empty, and mixed states", async () => {
@@ -278,14 +288,28 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
         assert.deepEqual(
           lines.filter((line) => (
             line === "SEC filings"
+            || line === SEC_FILING_HELPER
             || line === "AMD"
             || line === "NVIDIA"
             || line === AMD_FILING
             || line === NVDA_FILING
-            || line === "SEC filing"
+            || line === FILING_LINK_LABEL
+            || line === OUTLOOK_HELPER
           )),
-          ["SEC filings", "AMD", AMD_FILING, "SEC filing", "NVIDIA", NVDA_FILING, "SEC filing"]
+          [
+            "SEC filings",
+            SEC_FILING_HELPER,
+            "AMD",
+            AMD_FILING,
+            FILING_LINK_LABEL,
+            "NVIDIA",
+            NVDA_FILING,
+            FILING_LINK_LABEL,
+          ]
         );
+        assert.equal(lines.filter((line) => line === SEC_FILING_HELPER).length, 1);
+        assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
+        assert.equal(lines.includes(OUTLOOK_HELPER), false);
         assert.equal(lines.includes("Daily updates"), false);
         assert.equal(lines.includes("Alerts"), false);
         assert.equal(lines.includes(NO_NEWS_COPY), false);
@@ -378,10 +402,55 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
         assert.equal(lines.includes("SEC filings"), true);
         assert.equal(lines.includes("NVIDIA"), true);
         assert.equal(lines.includes(NVDA_FILING), true);
-        assert.equal(lines.includes("SEC filing"), false);
+        assert.equal(lines.includes(FILING_LINK_LABEL), false);
+        assert.equal(lines.includes(SEC_FILING_HELPER), true);
+        assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
+        assert.equal(lines.includes(OUTLOOK_HELPER), false);
         assert.equal(lines.includes(NO_NEWS_COPY), false);
         assert.equal(lines.includes("Daily updates"), false);
         assert.equal(lines.includes("2026-11-05"), false);
+      },
+    },
+    {
+      name: "outlook helper under the first outlook row",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [
+          {
+            ticker: "SONY",
+            short_name: "Sony",
+            line: "Sony raised its Outlook for the next quarter, according to an SEC filing on Nov 3.",
+            filing_url: "https://example.com/sony",
+          },
+          {
+            ticker: "NVDA",
+            short_name: "NVIDIA",
+            line: "NVIDIA confirmed its earlier outlook, according to an SEC filing on Nov 5.",
+            filing_url: NVDA_URL,
+          },
+          {
+            ticker: "AMD",
+            short_name: "AMD",
+            line: "AMD updated its outlook for the full year, according to an SEC filing on Nov 4.",
+            filing_url: AMD_URL,
+          },
+        ],
+      },
+      check(lines) {
+        const earlier = "NVIDIA confirmed its earlier outlook, according to an SEC filing on Nov 5.";
+        const later = "AMD updated its outlook for the full year, according to an SEC filing on Nov 4.";
+        assert.equal(lines.filter((line) => line === SEC_FILING_HELPER).length, 1);
+        assert.equal(lines.filter((line) => line === OUTLOOK_HELPER).length, 1);
+        assert.equal(lines.filter((line) => line === FILING_LINK_LABEL).length, 3);
+        assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
+        assert.ok(lines.indexOf(SEC_FILING_HELPER) < lines.indexOf("Sony"));
+        assert.ok(lines.indexOf(earlier) < lines.indexOf(OUTLOOK_HELPER));
+        assert.ok(lines.indexOf(OUTLOOK_HELPER) < lines.indexOf(later));
+        assert.equal(lines.includes("Daily updates"), false);
       },
     },
     {
@@ -415,7 +484,7 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
     }
     const filingProps = cases.find((item) => item.name === "filings in server order").props;
     const filingHtml = render.markup(filingProps);
-    const filingAnchors = anchorsFrom(filingHtml).filter((anchor) => anchor.text === "SEC filing");
+    const filingAnchors = anchorsFrom(filingHtml).filter((anchor) => anchor.text === FILING_LINK_LABEL);
     if (filingHtml.includes("<a ")) {
       assert.deepEqual(filingAnchors.map((anchor) => anchor.href), [AMD_URL, NVDA_URL]);
       for (const anchor of filingAnchors) {
@@ -425,7 +494,8 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
     } else {
       assert.equal(filingAnchors.length, 0);
       assert.equal(filingHtml.includes(NVDA_URL), false);
-      assert.equal(filingHtml.includes("SEC filing"), true);
+      assert.equal(filingHtml.includes(FILING_LINK_LABEL), true);
+      assert.equal(filingHtml.includes(SEC_FILING_HELPER), true);
       assert.equal(filingHtml.includes("Linking"), false);
     }
     const afterUnlike = render({
