@@ -131,6 +131,25 @@ class SecFiling(Base):
     summary_plain: Mapped[str | None] = mapped_column(Text, nullable=True)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
     amends_accession: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Filled only after the filing text is read. Older databases gain these
+    # columns at startup. Empty means the filing is not confirmed.
+    measure: Mapped[str | None] = mapped_column(Text, nullable=True)
+    figure: Mapped[str | None] = mapped_column(Text, nullable=True)
+    exhibit_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_quarter: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    counterparty: Mapped[str | None] = mapped_column(Text, nullable=True)
+    side: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    stage: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    asset: Mapped[str | None] = mapped_column(Text, nullable=True)
+    person: Mapped[str | None] = mapped_column(Text, nullable=True)
+    role: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lead_direction: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    resigned_or_retired: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    eff_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    guide_direction: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    period_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    leaders_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    text_outcome: Mapped[str | None] = mapped_column(String(24), nullable=True)
 
 
 class SecFetchState(Base):

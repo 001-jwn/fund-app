@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Alert, Company, Match, User
-from app.schemas import AlertOut, UpdateOut, UpdatesOut
+from app.schemas import AlertOut, FilingOut, UpdateOut, UpdatesOut
 from app.services.cards import liked_display_name
 from app.services.catalysts import NEW_YORK, detect_for_user, earnings_alert_is_current
 from app.services.digest import build_digest
+from app.services.sec_filings import filings_for_user
 from app.services.updates import build_update
 
 logger = logging.getLogger("fund.updates")
@@ -67,6 +68,7 @@ def get_updates(user_id: str = Query(...), db: Session = Depends(get_db)) -> Upd
         alerts=alerts,
         unseen_count=unseen_count,
         digest=digest,
+        filings=[FilingOut(**item) for item in filings_for_user(db, user_id)],
     )
 
 
