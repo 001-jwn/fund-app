@@ -36,12 +36,21 @@ _ADVICE = re.compile(
     re.I,
 )
 _ACCESSION = re.compile(r"\b\d{10}-\d{2}-\d{6}\b")
-_NAME = r"([A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,3})"
+_NAME = r"(?-i:([A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,3}))"
 _OFFICER_ROLE = (
     r"chief executive officer|chief financial officer|\bCEO\b|\bCFO\b|"
-    r"board chair|chair of the board|chairman of the board|chairperson of the board|"
-    r"named executive officer"
+    r"board chair|chair of the board|chairman of the board|chairperson of the board"
 )
+# A named executive officer confirms leadership. The phrase is not a job title.
+_NEO = r"(?:\b(?:a|an|its|the)\s+)?\bnamed executive officer\b"
+_REAL_TITLE = re.compile(
+    r"\b(chief [a-z]+ officer|CEO|CFO|COO|"
+    r"board chair|chair of the board|chairman of the board|chairperson of the board)\b",
+    re.I,
+)
+_NEGATION = re.compile(r"\b(?:not|no|never|neither|nor|cannot)\b|n't\b", re.I)
+_EXPLICIT_YEAR = re.compile(r"\b((?:19|20)\d{2})\b")
+_NOT_A_NAME = frozenset({"did", "not", "does"})
 _BAD_DEAL = re.compile(
     r"\b(?:credit agreement|guarant(?:y|ee)|lease agreement|partnership agreement|"
     r"commercial agreement|supply agreement|license agreement)\b",
@@ -109,7 +118,7 @@ def decide_filing(*, ticker: str, form: str, items: list[str], accession: str, d
     deal = _deal(items, usable)
     if deal is not None:
         hits.append(deal)
-    leaders = _leadership(items, usable)
+    leaders = _leadership(items, usable, _filing_year(accession))
     if leaders is not None:
         hits.append(leaders)
     guidance = _guidance(items, usable)
@@ -388,7 +397,17 @@ def _clean_party(value: str) -> str | None:
     return text
 
 
-def _leadership(items: list[str], docs: list[dict]) -> dict | None:
+def _filing_year(accession: str) -> int | None:
+    match = re.fullmatch(r"\d{10}-(\d{2})-\d{6}", (accession or "").strip())
+    if match is None:
+        return None
+    year = int(match.group(1))
+    if year >= 70:
+        return 1900 + year
+    return 2000 + year
+
+
+def _leadership(items: list[str], docs: list[dict], filing_year: int | None) -> dict | None:
     if "5.02" not in items:
         return None
     people = []
@@ -396,10 +415,14 @@ def _leadership(items: list[str], docs: list[dict]) -> dict | None:
     for sentence in _sentences(_combined(docs)):
         if re.search(r"\bannual meeting\b", sentence, re.I) and re.search(r"\belected\b", sentence, re.I):
             continue
-        person = _leader_in_sentence(sentence)
+        person = _leader_in_sentence(sentence, filing_year)
         if person is None:
             continue
-        key = (person["person"].lower(), person["role"].lower(), person["lead_direction"])
+        key = (
+            person["person"].lower(),
+            (person.get("role") or "").lower(),
+            person.get("lead_direction") or "",
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -418,7 +441,21 @@ def _leadership(items: list[str], docs: list[dict]) -> dict | None:
     return result
 
 
-def _leader_in_sentence(sentence: str) -> dict | None:
+def _sentence_hides_leadership(sentence: str, filing_year: int | None) -> bool:
+    """Hide when the sentence itself is negated or names an earlier year."""
+    if _NEGATION.search(sentence):
+        return True
+    years = [int(year) for year in _EXPLICIT_YEAR.findall(sentence)]
+    if not years:
+        return False
+    if filing_year is None:
+        return True
+    return any(year < filing_year for year in years)
+
+
+def _leader_in_sentence(sentence: str, filing_year: int | None) -> dict | None:
+    if _sentence_hides_leadership(sentence, filing_year):
+        return None
     role = _OFFICER_ROLE
     leaving = (
         rf"{_NAME}\s+(?:has\s+|will\s+)?resign(?:ed|s)?\s+as\s+(?:its\s+|the\s+)?({role})",
@@ -436,31 +473,94 @@ def _leader_in_sentence(sentence: str) -> dict | None:
     board_join = rf"\bappointed\s+{_NAME}\s+to\s+(?:its\s+|the\s+)?board of directors|{_NAME}\s+will\s+join\s+(?:its\s+|the\s+)?board of directors"
     board_leave = rf"{_NAME}\s+will\s+(?:leave|resign from)\s+(?:its\s+|the\s+)?board of directors"
     for pattern in leaving:
-        match = re.search(pattern, sentence, re.I)
-        if match:
-            return _leader_fields(match.group(1), match.group(2), "leaving", sentence)
+        found = _matched_leader(pattern, sentence, "leaving")
+        if found:
+            return found
     for pattern in joining:
-        match = re.search(pattern, sentence, re.I)
-        if match:
-            return _leader_fields(match.group(1), match.group(2), "joining", sentence)
+        found = _matched_leader(pattern, sentence, "joining")
+        if found:
+            return found
     match = re.search(board_join, sentence, re.I)
     if match:
-        person = next(group for group in match.groups() if group)
-        return _leader_fields(person, "board of directors", "joining", sentence)
+        person = next((group for group in match.groups() if group), None)
+        if person:
+            found = _leader_fields(person, "board of directors", "joining", sentence)
+            if found:
+                return found
     match = re.search(board_leave, sentence, re.I)
     if match:
-        return _leader_fields(match.group(1), "board of directors", "leaving", sentence)
+        found = _leader_fields(match.group(1), "board of directors", "leaving", sentence)
+        if found:
+            return found
+    return _named_executive_officer(sentence)
+
+
+def _matched_leader(pattern: str, sentence: str, direction: str) -> dict | None:
+    match = re.search(pattern, sentence, re.I)
+    if match is None:
+        return None
+    return _leader_fields(match.group(1), match.group(2), direction, sentence)
+
+
+def _named_executive_officer(sentence: str) -> dict | None:
+    gap = r"[\s\S]{0,80}?"
+    patterns = (
+        (rf"\bappointed\s+{_NAME}\s+as\s+{gap}{_NEO}", "joining"),
+        (rf"\b{_NAME}\s+(?:has been|was|will be)\s+appointed\s+as\s+{gap}{_NEO}", "joining"),
+        (rf"\b{_NAME}\s+will\s+become\s+{gap}{_NEO}", "joining"),
+        (rf"\b{_NAME}\s+(?:has\s+|will\s+)?resign(?:ed|s)?\s+as\s+{gap}{_NEO}", "leaving"),
+        (rf"\b{_NAME}\s+will\s+step\s+down\s+as\s+{gap}{_NEO}", "leaving"),
+        (rf"\b{_NAME}\s+will\s+(?:retire|leave|transition)\s+as\s+{gap}{_NEO}", "leaving"),
+        (rf"\b{_NAME}\s+(?:has\s+)?retired\s+as\s+{gap}{_NEO}", "leaving"),
+    )
+    for pattern, direction in patterns:
+        match = re.search(pattern, sentence, re.I)
+        if match is None:
+            continue
+        found = _leader_fields(match.group(1), _real_title(sentence), direction, sentence)
+        if found:
+            return found
     return None
 
 
-def _leader_fields(person: str, role: str, direction: str, sentence: str) -> dict | None:
+def _real_title(sentence: str) -> str | None:
+    found = []
+    for match in _REAL_TITLE.finditer(sentence):
+        title = _role_case(match.group(1))
+        if title not in found:
+            found.append(title)
+    if len(found) == 1:
+        return found[0]
+    return None
+
+
+def _valid_person_name(name: str) -> bool:
+    parts = name.split(" ")
+    if not 2 <= len(parts) <= 4 or parts[0].lower() == "the":
+        return False
+    patterns = (r"[A-Z][a-z]+",) + (r"[A-Z][a-z'\-]+",) * (len(parts) - 1)
+    for part, pattern in zip(parts, patterns):
+        lowered = part.lower()
+        if lowered in _NOT_A_NAME or "n't" in lowered:
+            return False
+        if not re.fullmatch(pattern, part):
+            return False
+    return True
+
+
+def _leader_fields(person: str, role: str | None, direction: str, sentence: str) -> dict | None:
     cleaned = re.sub(r"\s+", " ", person).strip()
-    if cleaned.lower().startswith("the "):
+    if not _valid_person_name(cleaned):
         return None
+    if role and _role_case(role) == "named executive officer":
+        role = _real_title(sentence)
+    stored = _role_case(role) if role else None
+    if stored == "named executive officer":
+        stored = None
     resigned = bool(re.search(r"\b(?:resign|resigned|retire|retired|retirement)\b", sentence, re.I))
     return {
         "person": cleaned,
-        "role": _role_case(role),
+        "role": stored,
         "lead_direction": direction,
         "resigned_or_retired": resigned,
         "eff_date": _eff_date(sentence),

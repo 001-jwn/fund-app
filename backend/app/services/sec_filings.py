@@ -153,7 +153,10 @@ def refresh_liked_8k_filings() -> None:
 
 
 def filings_for_user(session, user_id: str) -> list[dict]:
-    """Verified filings for this user's likes. No network. At most 10."""
+    """Verified filings for this user's likes. No network. At most 10.
+
+    A row is included only when its filing_url starts with https://www.sec.gov/.
+    """
     liked = {
         str(row[0]).strip().upper()
         for row in session.query(Like.ticker).filter(Like.user_id == user_id).all()
@@ -175,6 +178,8 @@ def filings_for_user(session, user_id: str) -> list[dict]:
     rows.sort(key=lambda row: (_accepted_sort(row.accepted_at), row.accession), reverse=True)
     kept = []
     for row in rows:
+        if not (row.filing_url or "").startswith("https://www.sec.gov/"):
+            continue
         line = (row.summary_plain or "").strip()
         if any(
             earlier.ticker == row.ticker
