@@ -14,6 +14,7 @@ import {
   newsAlertUrl,
   showDailySection,
   unseenCountFrom,
+  filingsFrom,
   updatesEmptyCopy,
   updatesFeed,
   updatesFrom,
@@ -291,11 +292,212 @@ test("web and phone screens render UpdatesFeed from the latest digest", () => {
     assert.match(source, /updatesFeed\(/);
     const digestAt = source.indexOf("feed.digest");
     const alertsAt = source.indexOf(">Alerts<");
+    const filingsAt = source.indexOf(">SEC filings<");
     const dailyAt = source.indexOf("Daily updates");
-    assert.ok(digestAt !== -1 && alertsAt !== -1 && dailyAt !== -1);
+    assert.ok(digestAt !== -1 && alertsAt !== -1 && filingsAt !== -1 && dailyAt !== -1);
     assert.ok(digestAt < alertsAt);
-    assert.ok(alertsAt < dailyAt);
+    assert.ok(alertsAt < filingsAt);
+    assert.ok(filingsAt < dailyAt);
   }
+});
+
+const NVDA_FILING = "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.";
+const AMD_FILING = "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.";
+const NVDA_URL = "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000010/0001045810-26-000010-index.html";
+const AMD_URL = "https://www.sec.gov/Archives/edgar/data/2488/000000248826000020/0000002488-26-000020-index.html";
+
+function filingRow(overrides) {
+  return {
+    ticker: "NVDA",
+    short_name: "NVIDIA",
+    accession: "0001045810-26-000010",
+    date_ny: "2026-11-05",
+    line: NVDA_FILING,
+    filing_url: NVDA_URL,
+    ...overrides,
+  };
+}
+
+test("filings stay in server order with the line and link untouched", () => {
+  const spaced = ` ${AMD_FILING} `;
+  const data = {
+    filings: [
+      filingRow({
+        ticker: "AMD",
+        short_name: "AMD",
+        accession: "0000002488-26-000020",
+        date_ny: "2026-11-01",
+        line: spaced,
+        filing_url: ` ${AMD_URL} `,
+      }),
+      filingRow(),
+    ],
+  };
+  const rows = filingsFrom(data);
+  assert.deepEqual(rows, [
+    { name: "AMD", line: spaced, url: AMD_URL },
+    { name: "NVIDIA", line: NVDA_FILING, url: NVDA_URL },
+  ]);
+  assert.equal(JSON.stringify(rows).includes("2026-11-01"), false);
+  assert.equal(JSON.stringify(rows).includes("2026-11-05"), false);
+  assert.deepEqual(Object.keys(rows[0]).sort(), ["line", "name", "url"]);
+  const section = digestSectionFrom(digestPayload([], QUIET), true);
+  const feed = updatesFeed({
+    updates: [],
+    alerts: [],
+    hasLikes: true,
+    digest: section,
+    filings: data.filings,
+  });
+  assert.deepEqual(feed.filings, rows);
+  assert.deepEqual(feed.digest.map((block) => block.text), [HEADER, QUIET]);
+  assert.equal(feed.emptyText, "");
+  assert.deepEqual(feed.daily, []);
+  assert.deepEqual(feed.alerts, []);
+  assert.equal(showDailySection({
+    updates: [],
+    alerts: [],
+    hasLikes: true,
+    digest: section,
+    filings: data.filings,
+  }), false);
+
+  const replaced = filingsFrom({ filings: [filingRow()] });
+  assert.deepEqual(replaced, [{ name: "NVIDIA", line: NVDA_FILING, url: NVDA_URL }]);
+  assert.deepEqual(filingsFrom({}), []);
+});
+
+test("a filing with no short name uses the ticker and still keeps a missing link off", () => {
+  assert.deepEqual(
+    filingsFrom({
+      filings: [
+        { ticker: "NVDA", line: NVDA_FILING, filing_url: NVDA_URL, date_ny: "2026-11-05" },
+        { ticker: "AMD", short_name: "", line: AMD_FILING, filing_url: null, date_ny: "2026-11-04" },
+        { ticker: "SONY", short_name: "Sony", line: SONY_LINE, filing_url: "   " },
+      ],
+    }),
+    [
+      { name: "NVDA", line: NVDA_FILING, url: NVDA_URL },
+      { name: "AMD", line: AMD_FILING, url: "" },
+      { name: "Sony", line: SONY_LINE, url: "" },
+    ]
+  );
+});
+
+test("missing, null, empty, and malformed filings add no section", () => {
+  assert.deepEqual(filingsFrom(null), []);
+  assert.deepEqual(filingsFrom(undefined), []);
+  assert.deepEqual(filingsFrom({}), []);
+  assert.deepEqual(filingsFrom({ filings: null }), []);
+  assert.deepEqual(filingsFrom({ filings: {} }), []);
+  assert.deepEqual(filingsFrom({ filings: "nope" }), []);
+  assert.deepEqual(filingsFrom({ filings: [] }), []);
+  assert.deepEqual(
+    filingsFrom({
+      filings: [
+        null,
+        { ticker: "NVDA", short_name: "NVIDIA", line: 3, filing_url: NVDA_URL },
+        { ticker: "AMD", short_name: "AMD", filing_url: AMD_URL },
+        "bad",
+        { ticker: "SONY", short_name: "Sony", line: SONY_LINE, filing_url: AMD_URL, date_ny: "2026-11-02" },
+      ],
+    }),
+    [{ name: "Sony", line: SONY_LINE, url: AMD_URL }]
+  );
+
+  const quietSection = digestSectionFrom(digestPayload([], QUIET), true);
+  for (const filings of [undefined, null, [], "nope", {}]) {
+    const quiet = updatesFeed({
+      updates: [],
+      alerts: [],
+      hasLikes: true,
+      digest: quietSection,
+      filings,
+    });
+    assert.deepEqual(quiet.filings, []);
+    assert.deepEqual(quiet.digest.map((block) => block.text), [HEADER, QUIET]);
+    assert.equal(quiet.emptyText, "");
+    assert.deepEqual(quiet.daily, []);
+    assert.deepEqual(quiet.alerts, []);
+
+    const noLikes = updatesFeed({
+      updates: [],
+      alerts: [],
+      hasLikes: false,
+      digest: { header: HEADER, lines: [NVDA_LINE], emptyLine: QUIET },
+      filings,
+    });
+    assert.deepEqual(noLikes.filings, []);
+    assert.deepEqual(noLikes.digest, []);
+    assert.equal(noLikes.emptyText, NO_LIKES_COPY);
+    assert.deepEqual(noLikes.daily, []);
+    assert.deepEqual(noLikes.alerts, []);
+
+    const noNews = updatesFeed({
+      updates: [],
+      alerts: [],
+      hasLikes: true,
+      digest: null,
+      filings,
+    });
+    assert.deepEqual(noNews.filings, []);
+    assert.deepEqual(noNews.digest, []);
+    assert.equal(noNews.emptyText, NO_NEWS_COPY);
+    assert.deepEqual(noNews.daily, []);
+  }
+});
+
+test("filing lines do not replace a quiet digest or invent a daily heading", () => {
+  const section = digestSectionFrom(digestPayload([], QUIET), true);
+  const feed = updatesFeed({
+    updates: [{ ticker: "RBLX", lines: ["RBLX is about flat (as of Nov 9), at US$40.00."] }],
+    alerts: [{ id: 9, ticker: "RBLX", kind: "price", line: "FIXTURE alert", seen: false }],
+    hasLikes: true,
+    digest: section,
+    filings: [filingRow()],
+  });
+  assert.deepEqual(feed.digest.map((block) => block.text), [HEADER, QUIET]);
+  assert.equal(feed.filings.length, 1);
+  assert.equal(feed.filings[0].line, NVDA_FILING);
+  assert.equal(feed.alerts.length, 1);
+  assert.equal(feed.daily.length, 1);
+  assert.equal(feed.emptyText, "");
+
+  const filingsOnly = updatesFeed({
+    updates: [],
+    alerts: [],
+    hasLikes: true,
+    digest: null,
+    filings: [filingRow()],
+  });
+  assert.deepEqual(filingsOnly.digest, []);
+  assert.equal(filingsOnly.emptyText, "");
+  assert.deepEqual(filingsOnly.daily, []);
+  assert.equal(filingsOnly.filings[0].line, NVDA_FILING);
+});
+
+test("the clients pass filings through and do not format a filing date", () => {
+  const web = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  const phone = fs.readFileSync(new URL("../../mobile/App.js", import.meta.url), "utf8");
+  const webFeed = fs.readFileSync(new URL("./UpdatesFeed.jsx", import.meta.url), "utf8");
+  const phoneFeed = fs.readFileSync(new URL("../../mobile/UpdatesFeed.js", import.meta.url), "utf8");
+  const view = fs.readFileSync(new URL("./alertView.js", import.meta.url), "utf8");
+  for (const source of [web, phone]) {
+    assert.match(source, /setFilings\(data \? data\.filings : null\)/);
+    assert.match(source, /filings=\{filings\}/);
+    assert.equal(source.includes("date_ny"), false);
+    assert.equal(source.includes("sec.gov"), false);
+  }
+  for (const source of [webFeed, phoneFeed, view]) {
+    assert.equal(source.includes("date_ny"), false);
+    assert.equal(source.includes(".sort("), false);
+  }
+  assert.match(webFeed, /target="_blank"/);
+  assert.match(webFeed, /rel="noopener/);
+  assert.match(phoneFeed, /Linking\.openURL\(filing\.url\)/);
+  const filingsFn = view.slice(view.indexOf("export function filingsFrom"), view.indexOf("export function updatesFeed"));
+  assert.equal(filingsFn.includes("Date"), false);
+  assert.equal(filingsFn.includes("new "), false);
 });
 
 test("helper flags are stored once per user", async () => {

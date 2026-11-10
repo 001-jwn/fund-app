@@ -64,23 +64,50 @@ export function helperForAlert(alert, alerts, flags) {
   return "";
 }
 
+// Server order and the server sentence. A missing, null, or non-array list is
+// not a section. An entry without a string line is skipped. The filing date is unused.
+export function filingsFrom(data) {
+  const raw = data && data.filings;
+  if (!Array.isArray(raw)) return [];
+  const rows = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    if (typeof item.line !== "string") continue;
+    let name = "";
+    if (typeof item.short_name === "string" && item.short_name.length > 0) {
+      name = item.short_name;
+    } else if (typeof item.ticker === "string") {
+      name = item.ticker;
+    }
+    const url = typeof item.filing_url === "string" && item.filing_url.trim().length > 0
+      ? item.filing_url.trim()
+      : "";
+    rows.push({ name, line: item.line, url });
+  }
+  return rows;
+}
+
 // What the Updates tab shows. digest is the result of digestSectionFrom.
 // A quiet digest replaces the old empty sentence and the empty Daily updates heading.
 // Lines and alerts that are actually present stay on screen.
-export function updatesFeed({ updates, alerts, hasLikes, digest }) {
+export function updatesFeed({ updates, alerts, hasLikes, digest, filings }) {
   const updateList = Array.isArray(updates) ? updates : [];
   const alertList = Array.isArray(alerts)
     ? alerts.filter((alert) => alert && typeof alert === "object")
     : [];
   const digestLines = hasLikes === true ? digestBlocks(digest) : [];
+  const filingList = filingsFrom({ filings });
   let emptyText = "";
   if (updateList.length === 0 && alertList.length === 0) {
     if (hasLikes === false) emptyText = NO_LIKES_COPY;
-    else if (hasLikes === true && digestLines.length === 0) emptyText = NO_NEWS_COPY;
+    else if (hasLikes === true && digestLines.length === 0 && filingList.length === 0) {
+      emptyText = NO_NEWS_COPY;
+    }
   }
   return {
     digest: digestLines,
     alerts: alertList,
+    filings: filingList,
     daily: updateList,
     emptyText,
   };

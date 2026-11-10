@@ -51,8 +51,22 @@ function DailyCard({ update }) {
   );
 }
 
-export default function UpdatesFeed({ updates, alerts, hasLikes, digest, helpers }) {
-  const feed = updatesFeed({ updates, alerts, hasLikes, digest });
+function FilingCard({ filing }) {
+  return (
+    <article className="card">
+      {filing.name ? <p className="row">{filing.name}</p> : null}
+      <p className="row">{filing.line}</p>
+      {filing.url ? (
+        <p className="row">
+          <a href={filing.url} target="_blank" rel="noopener noreferrer">SEC filing</a>
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+export default function UpdatesFeed({ updates, alerts, hasLikes, digest, filings, helpers }) {
+  const feed = updatesFeed({ updates, alerts, hasLikes, digest, filings });
   return (
     <div>
       {feed.digest.map((block, index) =>
@@ -75,6 +89,14 @@ export default function UpdatesFeed({ updates, alerts, hasLikes, digest, helpers
         </div>
       ) : null}
       {feed.emptyText ? <p>{feed.emptyText}</p> : null}
+      {feed.filings.length > 0 ? (
+        <div>
+          <h3>SEC filings</h3>
+          {feed.filings.map((filing, index) => (
+            <FilingCard key={`filing-${index}`} filing={filing} />
+          ))}
+        </div>
+      ) : null}
       {feed.daily.length > 0 ? (
         <div>
           <h3>Daily updates</h3>

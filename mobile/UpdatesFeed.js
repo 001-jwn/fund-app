@@ -66,16 +66,37 @@ function DailyCard({ update, onLinkError, styles }) {
   );
 }
 
+function FilingCard({ filing, onLinkError, styles }) {
+  return (
+    <View style={styles.card}>
+      {filing.name ? <Text style={styles.company}>{filing.name}</Text> : null}
+      <Text style={styles.row}>{filing.line}</Text>
+      {filing.url ? (
+        <Pressable
+          onPress={() => {
+            Linking.openURL(filing.url).catch(() => {
+              onLinkError("Could not open that link.");
+            });
+          }}
+        >
+          <Text style={[styles.row, styles.link]}>SEC filing</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export default function UpdatesFeed({
   updates,
   alerts,
   hasLikes,
   digest,
+  filings,
   helpers,
   styles,
   onLinkError,
 }) {
-  const feed = updatesFeed({ updates, alerts, hasLikes, digest });
+  const feed = updatesFeed({ updates, alerts, hasLikes, digest, filings });
   return (
     <View>
       {feed.digest.map((block, index) =>
@@ -100,6 +121,19 @@ export default function UpdatesFeed({
         </View>
       ) : null}
       {feed.emptyText ? <Text style={styles.row}>{feed.emptyText}</Text> : null}
+      {feed.filings.length > 0 ? (
+        <View>
+          <Text style={styles.sectionLabel}>SEC filings</Text>
+          {feed.filings.map((filing, index) => (
+            <FilingCard
+              key={`filing-${index}`}
+              filing={filing}
+              onLinkError={onLinkError}
+              styles={styles}
+            />
+          ))}
+        </View>
+      ) : null}
       {feed.daily.length > 0 ? (
         <View>
           <Text style={styles.sectionLabel}>Daily updates</Text>

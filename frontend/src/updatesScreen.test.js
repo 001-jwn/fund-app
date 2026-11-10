@@ -21,6 +21,29 @@ const RBLX_LINE = "RBLX is up 6.0% (as of Nov 9), at US$40.00.";
 const NVDA_LINE = "NVIDIA is up 3.0% (as of Nov 9), at US$123.45.";
 const AMD_LINE = "AMD is up 2.5% (as of Nov 9), at US$50.00.";
 const ALERT_LINE = "FIXTURE: RBLX is up 6.0% (as of Nov 9).";
+const NVDA_FILING = "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.";
+const AMD_FILING = "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.";
+const NVDA_URL = "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000010/0001045810-26-000010-index.html";
+const AMD_URL = "https://www.sec.gov/Archives/edgar/data/2488/000000248826000020/0000002488-26-000020-index.html";
+
+function anchorsFrom(html) {
+  const found = [];
+  const re = /<a\b([^>]*)>([^<]*)<\/a>/gi;
+  let match;
+  while ((match = re.exec(html))) {
+    const attrs = match[1];
+    const href = /href="([^"]*)"/.exec(attrs);
+    const target = /target="([^"]*)"/.exec(attrs);
+    const rel = /rel="([^"]*)"/.exec(attrs);
+    found.push({
+      text: match[2].replace(/&amp;/g, "&"),
+      href: href ? href[1].replace(/&amp;/g, "&") : "",
+      target: target ? target[1] : "",
+      rel: rel ? rel[1] : "",
+    });
+  }
+  return found;
+}
 
 function section(items, emptyLine) {
   return digestSectionFrom(
@@ -97,12 +120,17 @@ export const StyleSheet = { create: (styles) => styles };
   const loaded = await import(pathToFileURL(outfile).href);
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  return function render(props) {
+  function markup(props) {
     const feedProps = which === "phone"
       ? { ...props, styles: phoneStyles, onLinkError: () => {} }
       : props;
-    return visibleText(renderToStaticMarkup(createElement(loaded.default, feedProps)));
-  };
+    return renderToStaticMarkup(createElement(loaded.default, feedProps));
+  }
+  function render(props) {
+    return visibleText(markup(props));
+  }
+  render.markup = markup;
+  return render;
 }
 
 function assertQuiet(lines) {
@@ -219,6 +247,144 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
       },
     },
     {
+      name: "filings in server order",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [
+          {
+            ticker: "AMD",
+            short_name: "AMD",
+            accession: "0000002488-26-000020",
+            date_ny: "2026-11-01",
+            line: AMD_FILING,
+            filing_url: AMD_URL,
+          },
+          {
+            ticker: "NVDA",
+            short_name: "NVIDIA",
+            accession: "0001045810-26-000010",
+            date_ny: "2026-11-09",
+            line: NVDA_FILING,
+            filing_url: NVDA_URL,
+          },
+        ],
+      },
+      check(lines) {
+        assert.deepEqual(lines.slice(0, 2), [HEADER, QUIET]);
+        assert.deepEqual(
+          lines.filter((line) => (
+            line === "SEC filings"
+            || line === "AMD"
+            || line === "NVIDIA"
+            || line === AMD_FILING
+            || line === NVDA_FILING
+            || line === "SEC filing"
+          )),
+          ["SEC filings", "AMD", AMD_FILING, "SEC filing", "NVIDIA", NVDA_FILING, "SEC filing"]
+        );
+        assert.equal(lines.includes("Daily updates"), false);
+        assert.equal(lines.includes("Alerts"), false);
+        assert.equal(lines.includes(NO_NEWS_COPY), false);
+        assert.equal(lines.includes("2026-11-01"), false);
+        assert.equal(lines.includes("2026-11-09"), false);
+        assert.ok(lines.indexOf("SEC filings") > lines.indexOf(QUIET));
+      },
+    },
+    {
+      name: "filings above daily lines",
+      props: {
+        updates: [{ ticker: "RBLX", lines: [RBLX_LINE], news_url: null }],
+        alerts: [{ id: 4, ticker: "RBLX", kind: "price", line: ALERT_LINE, seen: false }],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [
+          {
+            ticker: "NVDA",
+            short_name: "NVIDIA",
+            date_ny: "2026-11-05",
+            line: NVDA_FILING,
+            filing_url: NVDA_URL,
+          },
+        ],
+      },
+      check(lines) {
+        assert.equal(lines.includes(QUIET), true);
+        assert.equal(lines.includes("Alerts"), true);
+        assert.equal(lines.includes("SEC filings"), true);
+        assert.equal(lines.includes(NVDA_FILING), true);
+        assert.equal(lines.includes("Daily updates"), true);
+        assert.equal(lines.includes(RBLX_LINE), true);
+        assert.ok(lines.indexOf("Alerts") < lines.indexOf("SEC filings"));
+        assert.ok(lines.indexOf("SEC filings") < lines.indexOf("Daily updates"));
+        assert.equal(lines.filter((line) => line === "Daily updates").length, 1);
+        assert.equal(lines.filter((line) => line === "SEC filings").length, 1);
+      },
+    },
+    {
+      name: "null filings",
+      props: { updates: [], alerts: [], hasLikes: true, digest: quietDigest, filings: null, helpers: {} },
+      check: assertQuiet,
+    },
+    {
+      name: "empty filings",
+      props: { updates: [], alerts: [], hasLikes: true, digest: quietDigest, filings: [], helpers: {} },
+      check: assertQuiet,
+    },
+    {
+      name: "filings not a list",
+      props: { updates: [], alerts: [], hasLikes: true, digest: quietDigest, filings: { line: NVDA_FILING }, helpers: {} },
+      check: assertQuiet,
+    },
+    {
+      name: "malformed filings",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [null, { ticker: "NVDA", short_name: "NVIDIA", line: 4, filing_url: NVDA_URL }, { ticker: "AMD" }],
+      },
+      check: assertQuiet,
+    },
+    {
+      name: "no likes with empty filings",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: false,
+        digest: { header: HEADER, lines: [], emptyLine: QUIET },
+        filings: [],
+        helpers: {},
+      },
+      check: assertNoLikes,
+    },
+    {
+      name: "filing without a link still shows the line",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: null,
+        helpers: {},
+        filings: [{ ticker: "NVDA", short_name: "NVIDIA", line: NVDA_FILING, filing_url: null, date_ny: "2026-11-05" }],
+      },
+      check(lines) {
+        assert.equal(lines.includes("SEC filings"), true);
+        assert.equal(lines.includes("NVIDIA"), true);
+        assert.equal(lines.includes(NVDA_FILING), true);
+        assert.equal(lines.includes("SEC filing"), false);
+        assert.equal(lines.includes(NO_NEWS_COPY), false);
+        assert.equal(lines.includes("Daily updates"), false);
+        assert.equal(lines.includes("2026-11-05"), false);
+      },
+    },
+    {
       name: "mixed alert and daily",
       props: {
         updates: [{ ticker: "RBLX", lines: [RBLX_LINE], news_url: "https://example.com/rblx-fixture" }],
@@ -246,6 +412,21 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
       const lines = render(item.props);
       item.check(lines);
       if (item.name === "populated digest") populated = lines;
+    }
+    const filingProps = cases.find((item) => item.name === "filings in server order").props;
+    const filingHtml = render.markup(filingProps);
+    const filingAnchors = anchorsFrom(filingHtml).filter((anchor) => anchor.text === "SEC filing");
+    if (filingHtml.includes("<a ")) {
+      assert.deepEqual(filingAnchors.map((anchor) => anchor.href), [AMD_URL, NVDA_URL]);
+      for (const anchor of filingAnchors) {
+        assert.equal(anchor.target, "_blank");
+        assert.match(anchor.rel, /noopener/);
+      }
+    } else {
+      assert.equal(filingAnchors.length, 0);
+      assert.equal(filingHtml.includes(NVDA_URL), false);
+      assert.equal(filingHtml.includes("SEC filing"), true);
+      assert.equal(filingHtml.includes("Linking"), false);
     }
     const afterUnlike = render({
       updates: [{ ticker: "NVDA", lines: [NVDA_LINE], news_url: null }],
