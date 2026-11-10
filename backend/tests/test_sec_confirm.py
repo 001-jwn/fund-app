@@ -226,6 +226,92 @@ def test_named_officer_change_step_down_is_not_resigned():
     assert _line(joined) == "NVIDIA announced that Ada Lovelace will become its chief financial officer."
 
 
+def test_negated_leadership_sentence_stays_hidden():
+    text = "Jane Doe did not resign as chief executive officer."
+    doc = _doc(text)
+    assert len(doc["text"].encode("utf-8")) >= 200
+    for sentence in (
+        text,
+        "The board did not announce that Jane Doe resigned as chief executive officer.",
+        "Jane Doe will not resign as chief executive officer.",
+    ):
+        decision = _decide(["5.02"], [_doc(sentence)])
+        assert decision["h3_category"] is None
+        assert decision["verified"] is False
+        assert decision["person"] is None
+        assert _line(decision) is None
+        assert "did not" not in (decision.get("person") or "")
+
+
+def test_past_year_leadership_sentence_stays_hidden():
+    for text in (
+        "In 2019, Jane Doe resigned as chief financial officer.",
+        "Jane Doe resigned as chief financial officer, a role held since 2019.",
+    ):
+        decision = _decide(
+            ["5.02"],
+            [_doc(text)],
+            accession="0001045810-26-000010",
+        )
+        assert decision["h3_category"] is None
+        assert decision["verified"] is False
+        assert decision["person"] is None
+        assert _line(decision) is None
+
+
+def test_current_ceo_step_down_still_confirms():
+    decision = _decide(
+        ["5.02"],
+        [_doc("Jane Doe resigned as chief executive officer.")],
+        accession="0001045810-26-000010",
+    )
+    assert decision["h3_category"] == "leadership"
+    assert decision["verified"] is True
+    assert decision["person"] == "Jane Doe"
+    assert decision["role"] == "chief executive officer"
+    assert decision["lead_direction"] == "leaving"
+    assert decision["resigned_or_retired"] is True
+    assert _line(decision) == "NVIDIA announced that Jane Doe, its chief executive officer, will step down."
+
+
+def test_named_executive_officer_without_a_title_uses_the_fallback():
+    for phrase in (
+        "a named executive officer",
+        "an named executive officer",
+        "its named executive officer",
+        "the named executive officer",
+        "named executive officer",
+    ):
+        decision = _decide(
+            ["5.02"],
+            [_doc(f"The Company appointed Pat Lee as {phrase}.")],
+        )
+        assert decision["h3_category"] == "leadership"
+        assert decision["verified"] is True
+        assert decision["person"] == "Pat Lee"
+        assert decision["role"] is None
+        line = _line(decision)
+        assert line == "NVIDIA announced a leadership change in an SEC filing on Nov 5."
+        assert "named executive" not in line
+        assert "Pat Lee" not in line
+
+
+def test_named_executive_officer_uses_a_real_title():
+    for text in (
+        "The Company appointed Pat Lee as chief operating officer and a named executive officer.",
+        "The Company appointed Pat Lee as a named executive officer and chief operating officer.",
+    ):
+        decision = _decide(["5.02"], [_doc(text)])
+        assert decision["h3_category"] == "leadership"
+        assert decision["person"] == "Pat Lee"
+        assert decision["role"] == "chief operating officer"
+        assert decision["lead_direction"] == "joining"
+        assert decision["resigned_or_retired"] is False
+        line = _line(decision)
+        assert line == "NVIDIA announced that Pat Lee will become its chief operating officer."
+        assert "named executive" not in line
+
+
 def test_guidance_without_outlook_text_is_hidden():
     decision = _decide(
         ["7.01", "8.01"],
@@ -471,6 +557,59 @@ def test_updates_filings_are_liked_confirmed_and_offline(client, monkeypatch):
     assert other_body["filings"] == []
 
 
+def test_updates_omit_filings_whose_url_is_not_on_sec(client, monkeypatch):
+    user_id = _onboard(client, ["gaming"])
+    _like(client, user_id, "NVDA")
+    good = (
+        "https://www.sec.gov/Archives/edgar/data/1045810/"
+        "000104581026000010/0001045810-26-000010-index.html"
+    )
+    _insert_filing(
+        "0001045810-26-000010",
+        "NVDA",
+        "2026-11-06T02:00:00Z",
+        "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.",
+        True,
+        "earnings",
+        filing_url=good,
+    )
+    _insert_filing(
+        "0001045810-26-000012",
+        "NVDA",
+        "2026-11-07T15:00:00Z",
+        "NVIDIA shared its latest results in an SEC filing on Nov 7.",
+        True,
+        "earnings",
+        filing_url="https://example.com/not-the-sec",
+    )
+    _insert_filing(
+        "0001045810-26-000013",
+        "NVDA",
+        "2026-11-08T15:00:00Z",
+        "NVIDIA shared its latest results in an SEC filing on Nov 8.",
+        True,
+        "earnings",
+        filing_url="http://www.sec.gov/Archives/edgar/data/1045810/not-https.htm",
+    )
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("network during GET /updates")
+
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+    monkeypatch.setattr("app.services.sec_filings.urllib.request.urlopen", boom)
+    body = client.get("/updates", params={"user_id": user_id}).json()
+    assert sorted(body) == ["alerts", "digest", "filings", "unseen_count", "updates"]
+    assert [item["accession"] for item in body["filings"]] == ["0001045810-26-000010"]
+    assert body["filings"][0] == {
+        "ticker": "NVDA",
+        "short_name": "NVIDIA",
+        "accession": "0001045810-26-000010",
+        "date_ny": "2026-11-05",
+        "line": "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.",
+        "filing_url": good,
+    }
+
+
 def test_duplicate_lines_keep_both_records_and_show_the_later_one(client):
     user_id = _onboard(client, ["gaming"])
     _like(client, user_id, "NVDA")
@@ -699,10 +838,15 @@ def _all_filings():
     return rows
 
 
-def _insert_filing(accession, ticker, accepted_at, line, verified, category):
+def _insert_filing(accession, ticker, accepted_at, line, verified, category, filing_url=None):
     from app.db import SessionLocal
     from app.models import SecFiling
 
+    if filing_url is None:
+        filing_url = (
+            "https://www.sec.gov/Archives/edgar/data/1045810/"
+            f"{accession.replace('-', '')}/{accession}-index.html"
+        )
     session = SessionLocal()
     session.add(
         SecFiling(
@@ -714,10 +858,7 @@ def _insert_filing(accession, ticker, accepted_at, line, verified, category):
             items="2.02",
             h3_candidate=True,
             h3_category=category,
-            filing_url=(
-                "https://www.sec.gov/Archives/edgar/data/1045810/"
-                f"{accession.replace('-', '')}/{accession}-index.html"
-            ),
+            filing_url=filing_url,
             summary_plain=line,
             verified=verified,
             text_outcome="confirmed" if verified else "unconfirmable",
