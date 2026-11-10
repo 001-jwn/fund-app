@@ -80,6 +80,46 @@ export function showDailySection({ updates, alerts, hasLikes }) {
   return false;
 }
 
+// Server copy only. A header with no lines and no quiet line is not a section,
+// including when the server still sends a header for someone with no likes.
+export function digestSectionFrom(data, hasLikes) {
+  if (hasLikes !== true) return null;
+  const raw = data && data.digest;
+  if (!raw || typeof raw !== "object") return null;
+  const header = typeof raw.header === "string" && raw.header.length > 0 ? raw.header : null;
+  const items = Array.isArray(raw.items) ? raw.items : [];
+  const lines = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    if (typeof item.line !== "string") continue;
+    lines.push(item.line);
+  }
+  if (lines.length > 0) {
+    return { header, lines, emptyLine: null };
+  }
+  const emptyLine = typeof raw.empty_line === "string" && raw.empty_line.length > 0
+    ? raw.empty_line
+    : null;
+  if (!emptyLine) return null;
+  return { header, lines: [], emptyLine };
+}
+
+export function digestBlocks(section) {
+  if (!section || typeof section !== "object") return [];
+  const lines = Array.isArray(section.lines)
+    ? section.lines.filter((line) => typeof line === "string")
+    : [];
+  let body = lines.map((text) => ({ role: "line", text }));
+  if (body.length === 0 && typeof section.emptyLine === "string" && section.emptyLine.length > 0) {
+    body = [{ role: "empty", text: section.emptyLine }];
+  }
+  if (body.length === 0) return [];
+  if (typeof section.header === "string" && section.header.length > 0) {
+    return [{ role: "header", text: section.header }, ...body];
+  }
+  return body;
+}
+
 export async function claimHelperFlags(userId, alerts, storage) {
   const flags = { price: false, earnings: false };
   if (!userId || !storage || !Array.isArray(alerts)) return flags;

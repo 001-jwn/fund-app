@@ -19,6 +19,8 @@ import {
   alertsFrom,
   alertKindLabel,
   claimHelperFlags,
+  digestBlocks,
+  digestSectionFrom,
   helperForAlert,
   newsAlertUrl,
   showDailySection,
@@ -89,6 +91,22 @@ function BecauseLiked({ card }) {
   const text = becauseLikedText(card);
   if (!text) return null;
   return <Text style={styles.row}>{text}</Text>;
+}
+
+function DigestSection({ digest }) {
+  const blocks = digestBlocks(digest);
+  if (blocks.length === 0) return null;
+  return (
+    <View>
+      {blocks.map((block, index) =>
+        block.role === "header" ? (
+          <Text key={`digest-${index}`} style={styles.sectionLabel}>{block.text}</Text>
+        ) : (
+          <Text key={`digest-${index}`} style={styles.row}>{block.text}</Text>
+        )
+      )}
+    </View>
+  );
 }
 
 function AlertCard({ alert, helper, onLinkError }) {
@@ -222,6 +240,7 @@ export default function App() {
   const [matches, setMatches] = useState([]);
   const [updates, setUpdates] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [digest, setDigest] = useState(null);
   const [unseenCount, setUnseenCount] = useState(0);
   const [hasLikes, setHasLikes] = useState(null);
   const [helpers, setHelpers] = useState({ price: false, earnings: false });
@@ -358,6 +377,7 @@ export default function App() {
         const nextAlerts = alertsFrom(data);
         const unseen = unseenCountFrom(data);
         let likes = nextUpdates.length > 0 || nextAlerts.length > 0 ? true : null;
+        if (likes === null && digestSectionFrom(data, true)) likes = true;
         if (likes === null) {
           try {
             const matchData = await getMatches(userId);
@@ -379,6 +399,7 @@ export default function App() {
         if (!latest()) return;
         setUpdates(nextUpdates);
         setAlerts(nextAlerts);
+        setDigest(digestSectionFrom(data, likes));
         setHasLikes(likes);
         setHelpers(nextHelpers);
         setUnseenCount(unseen);
@@ -438,6 +459,7 @@ export default function App() {
     setMatches([]);
     setUpdates([]);
     setAlerts([]);
+    setDigest(null);
     setUnseenCount(0);
     setHasLikes(null);
     setHelpers({ price: false, earnings: false });
@@ -476,6 +498,7 @@ export default function App() {
       const result = await onboard(picked);
       await AsyncStorage.setItem(USER_KEY, result.user_id);
       setAlerts([]);
+      setDigest(null);
       setUnseenCount(0);
       setHasLikes(null);
       setHelpers({ price: false, earnings: false });
@@ -624,6 +647,7 @@ export default function App() {
             <View>
               <Text style={styles.heading}>Updates</Text>
               {loading ? <Text>Loading updates...</Text> : null}
+              {!loading ? <DigestSection digest={digest} /> : null}
               {!loading && alerts.length > 0 ? (
                 <View>
                   <Text style={styles.sectionLabel}>Alerts</Text>

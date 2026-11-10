@@ -3,6 +3,8 @@ import {
   alertsFrom,
   alertKindLabel,
   claimHelperFlags,
+  digestBlocks,
+  digestSectionFrom,
   helperForAlert,
   newsAlertUrl,
   showDailySection,
@@ -64,6 +66,22 @@ function BecauseLiked({ card }) {
   return <p className="row">{text}</p>;
 }
 
+function DigestSection({ digest }) {
+  const blocks = digestBlocks(digest);
+  if (blocks.length === 0) return null;
+  return (
+    <div>
+      {blocks.map((block, index) =>
+        block.role === "header" ? (
+          <h3 key={`digest-${index}`}>{block.text}</h3>
+        ) : (
+          <p className="row" key={`digest-${index}`}>{block.text}</p>
+        )
+      )}
+    </div>
+  );
+}
+
 function AlertCard({ alert, helper }) {
   const url = newsAlertUrl(alert);
   const line = typeof alert.line === "string" ? alert.line : "";
@@ -97,6 +115,7 @@ export default function App() {
   const [matches, setMatches] = useState([]);
   const [updates, setUpdates] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [digest, setDigest] = useState(null);
   const [unseenCount, setUnseenCount] = useState(0);
   const [hasLikes, setHasLikes] = useState(null);
   const [helpers, setHelpers] = useState({ price: false, earnings: false });
@@ -209,6 +228,7 @@ export default function App() {
         const nextAlerts = alertsFrom(data);
         const unseen = unseenCountFrom(data);
         let likes = nextUpdates.length > 0 || nextAlerts.length > 0 ? true : null;
+        if (likes === null && digestSectionFrom(data, true)) likes = true;
         if (likes === null) {
           try {
             const matchData = await getMatches(userId);
@@ -230,6 +250,7 @@ export default function App() {
         if (!latest()) return;
         setUpdates(nextUpdates);
         setAlerts(nextAlerts);
+        setDigest(digestSectionFrom(data, likes));
         setHasLikes(likes);
         setHelpers(nextHelpers);
         setUnseenCount(unseen);
@@ -289,6 +310,7 @@ export default function App() {
     setMatches([]);
     setUpdates([]);
     setAlerts([]);
+    setDigest(null);
     setUnseenCount(0);
     setHasLikes(null);
     setHelpers({ price: false, earnings: false });
@@ -328,6 +350,7 @@ export default function App() {
       const result = await onboard(picked);
       localStorage.setItem(USER_KEY, result.user_id);
       setAlerts([]);
+      setDigest(null);
       setUnseenCount(0);
       setHasLikes(null);
       setHelpers({ price: false, earnings: false });
@@ -489,6 +512,7 @@ export default function App() {
         <section>
           <h2>Updates</h2>
           {loading ? <p>Loading updates...</p> : null}
+          {!loading ? <DigestSection digest={digest} /> : null}
           {!loading && alerts.length > 0 ? (
             <div>
               <h3>Alerts</h3>
