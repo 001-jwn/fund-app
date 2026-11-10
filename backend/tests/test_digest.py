@@ -217,6 +217,30 @@ def test_missing_parts_are_not_counted(client):
 
 
 def test_updates_digest_shape_excludes_unliked_and_does_not_call_finnhub(client, monkeypatch):
+    # GET /updates asks the digest for the real clock. This fixture's news
+    # instant is 2026-11-06 02:00 UTC (21:00 ET on Nov 5). Pin both this
+    # test's clock and the digest clock to an hour later so that headline
+    # stays inside the rolling day, on any date the suite is run.
+    frozen = datetime(2026, 11, 6, 3, 0, tzinfo=timezone.utc)
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return frozen.replace(tzinfo=None)
+            return frozen.astimezone(tz)
+
+    monkeypatch.setattr(f"{__name__}.datetime", _FrozenDateTime)
+
+    def _frozen_as_utc(now=None):
+        if now is None:
+            return frozen
+        if now.tzinfo is None:
+            return now.replace(tzinfo=timezone.utc)
+        return now.astimezone(timezone.utc)
+
+    monkeypatch.setattr("app.services.digest._as_utc", _frozen_as_utc)
+
     calls = []
 
     def boom(*_args, **_kwargs):
@@ -285,6 +309,8 @@ def test_updates_digest_shape_excludes_unliked_and_does_not_call_finnhub(client,
     assert all("Nov 6" not in item["line"] or "as of" in item["line"] for item in body["digest"]["items"])
     digest_line = body["digest"]["items"][0]["line"]
     assert "Nov 5" in digest_line
+    assert "(Example Wire, Nov 5)." in digest_line
+    assert "Nov 6" not in digest_line
     assert "Jan 15" not in digest_line
     assert set(body) >= {"updates", "alerts", "unseen_count", "digest"}
     assert calls == []
