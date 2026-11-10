@@ -179,6 +179,8 @@ You should not see an error. On Windows you may see `1 file(s) copied.` A new fi
 
 That `.env` file is the only place a Finnhub key goes. Never paste the key into a `.py`, `.js`, or `.jsx` file, and never commit the `.env` file.
 
+`SEC_USER_AGENT` is optional. It is how the app introduces itself to the SEC when it saves 8-K filing details for stocks you liked. Leave it blank and the app skips that step. A placeholder looks like `fun(d) contact@example.com`. Use your own email there. Do not commit the `.env` file.
+
 ## 8. Put your Finnhub key in .env, or leave it blank
 
 This step is not a terminal command.
@@ -560,6 +562,10 @@ If you have not liked a stock, Updates still says `Like a few stocks and their d
 
 Checking alerts does not call Finnhub. If the cache has no quote, no earnings date, or no headline, nothing is added.
 
+## 8-K filings
+
+For US stocks you have liked, the app can save recent SEC Form 8-K and 8-K/A filing details in the background. It does not read those filings when you open Updates. NTES, SONY, SPOT, TM, and RACE are skipped. The saved rows do not include a summary, and they are not shown as confirmed categories. Set `SEC_USER_AGENT` or this step is skipped. If the SEC says no (HTTP 403 or 429), the app stops that run, waits a short time, and does not try to disguise itself.
+
 ## Optional: run the automated checks
 
 You can skip this. It is for checking that the app's rules still hold. Use a new terminal in the `fund-app` folder, after step 6. Do not stop the backend if it is already running. This check uses its own temporary database.
@@ -576,4 +582,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `73 passed`.
+The last line should include `80 passed`.
