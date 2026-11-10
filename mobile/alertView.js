@@ -64,20 +64,74 @@ export function helperForAlert(alert, alerts, flags) {
   return "";
 }
 
-export function updatesEmptyCopy({ updates, alerts, hasLikes }) {
-  const updateCount = Array.isArray(updates) ? updates.length : 0;
-  const alertCount = Array.isArray(alerts) ? alerts.length : 0;
-  if (updateCount > 0 || alertCount > 0) return "";
-  if (hasLikes === true) return NO_NEWS_COPY;
-  if (hasLikes === false) return NO_LIKES_COPY;
-  return "";
+// What the Updates tab shows. digest is the result of digestSectionFrom.
+// A quiet digest replaces the old empty sentence and the empty Daily updates heading.
+// Lines and alerts that are actually present stay on screen.
+export function updatesFeed({ updates, alerts, hasLikes, digest }) {
+  const updateList = Array.isArray(updates) ? updates : [];
+  const alertList = Array.isArray(alerts)
+    ? alerts.filter((alert) => alert && typeof alert === "object")
+    : [];
+  const digestLines = hasLikes === true ? digestBlocks(digest) : [];
+  let emptyText = "";
+  if (updateList.length === 0 && alertList.length === 0) {
+    if (hasLikes === false) emptyText = NO_LIKES_COPY;
+    else if (hasLikes === true && digestLines.length === 0) emptyText = NO_NEWS_COPY;
+  }
+  return {
+    digest: digestLines,
+    alerts: alertList,
+    daily: updateList,
+    emptyText,
+  };
 }
 
-export function showDailySection({ updates, alerts, hasLikes }) {
-  if (Array.isArray(updates) && updates.length > 0) return true;
-  if (hasLikes === true) return true;
-  if (Array.isArray(alerts) && alerts.length > 0) return true;
-  return false;
+export function updatesEmptyCopy(input) {
+  return updatesFeed(input).emptyText;
+}
+
+export function showDailySection(input) {
+  return updatesFeed(input).daily.length > 0;
+}
+
+// Server copy only. A header with no lines and no quiet line is not a section,
+// including when the server still sends a header for someone with no likes.
+export function digestSectionFrom(data, hasLikes) {
+  if (hasLikes !== true) return null;
+  const raw = data && data.digest;
+  if (!raw || typeof raw !== "object") return null;
+  const header = typeof raw.header === "string" && raw.header.length > 0 ? raw.header : null;
+  const items = Array.isArray(raw.items) ? raw.items : [];
+  const lines = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    if (typeof item.line !== "string") continue;
+    lines.push(item.line);
+  }
+  if (lines.length > 0) {
+    return { header, lines, emptyLine: null };
+  }
+  const emptyLine = typeof raw.empty_line === "string" && raw.empty_line.length > 0
+    ? raw.empty_line
+    : null;
+  if (!emptyLine) return null;
+  return { header, lines: [], emptyLine };
+}
+
+export function digestBlocks(section) {
+  if (!section || typeof section !== "object") return [];
+  const lines = Array.isArray(section.lines)
+    ? section.lines.filter((line) => typeof line === "string")
+    : [];
+  let body = lines.map((text) => ({ role: "line", text }));
+  if (body.length === 0 && typeof section.emptyLine === "string" && section.emptyLine.length > 0) {
+    body = [{ role: "empty", text: section.emptyLine }];
+  }
+  if (body.length === 0) return [];
+  if (typeof section.header === "string" && section.header.length > 0) {
+    return [{ role: "header", text: section.header }, ...body];
+  }
+  return body;
 }
 
 export async function claimHelperFlags(userId, alerts, storage) {

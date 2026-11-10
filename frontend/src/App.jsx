@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   alertsFrom,
-  alertKindLabel,
   claimHelperFlags,
-  helperForAlert,
-  newsAlertUrl,
-  showDailySection,
+  digestSectionFrom,
   unseenCountFrom,
-  updatesEmptyCopy,
   updatesFrom,
   updatesNavLabel,
 } from "./alertView";
+import UpdatesFeed from "./UpdatesFeed";
 import {
   dislikeCompany,
   getCards,
@@ -64,29 +61,6 @@ function BecauseLiked({ card }) {
   return <p className="row">{text}</p>;
 }
 
-function AlertCard({ alert, helper }) {
-  const url = newsAlertUrl(alert);
-  const line = typeof alert.line === "string" ? alert.line : "";
-  const unseen = alert.seen !== true;
-  return (
-    <article className="card alert">
-      <p className="alert-label">
-        Alert · {alertKindLabel(alert.kind)}
-        {unseen ? " · New" : ""}
-      </p>
-      <p className="row">{alert.ticker}</p>
-      {url ? (
-        <p className={unseen ? "row unseen" : "row"}>
-          <a href={url} target="_blank" rel="noopener noreferrer">{line}</a>
-        </p>
-      ) : (
-        <p className={unseen ? "row unseen" : "row"}>{line}</p>
-      )}
-      {helper ? <p className="helper">{helper}</p> : null}
-    </article>
-  );
-}
-
 export default function App() {
   const [screen, setScreen] = useState(() =>
     localStorage.getItem(USER_KEY) ? "swipe" : "onboarding"
@@ -97,6 +71,7 @@ export default function App() {
   const [matches, setMatches] = useState([]);
   const [updates, setUpdates] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [digest, setDigest] = useState(null);
   const [unseenCount, setUnseenCount] = useState(0);
   const [hasLikes, setHasLikes] = useState(null);
   const [helpers, setHelpers] = useState({ price: false, earnings: false });
@@ -209,6 +184,7 @@ export default function App() {
         const nextAlerts = alertsFrom(data);
         const unseen = unseenCountFrom(data);
         let likes = nextUpdates.length > 0 || nextAlerts.length > 0 ? true : null;
+        if (likes === null && digestSectionFrom(data, true)) likes = true;
         if (likes === null) {
           try {
             const matchData = await getMatches(userId);
@@ -230,6 +206,7 @@ export default function App() {
         if (!latest()) return;
         setUpdates(nextUpdates);
         setAlerts(nextAlerts);
+        setDigest(digestSectionFrom(data, likes));
         setHasLikes(likes);
         setHelpers(nextHelpers);
         setUnseenCount(unseen);
@@ -289,6 +266,7 @@ export default function App() {
     setMatches([]);
     setUpdates([]);
     setAlerts([]);
+    setDigest(null);
     setUnseenCount(0);
     setHasLikes(null);
     setHelpers({ price: false, earnings: false });
@@ -328,6 +306,7 @@ export default function App() {
       const result = await onboard(picked);
       localStorage.setItem(USER_KEY, result.user_id);
       setAlerts([]);
+      setDigest(null);
       setUnseenCount(0);
       setHasLikes(null);
       setHelpers({ price: false, earnings: false });
@@ -489,47 +468,14 @@ export default function App() {
         <section>
           <h2>Updates</h2>
           {loading ? <p>Loading updates...</p> : null}
-          {!loading && alerts.length > 0 ? (
-            <div>
-              <h3>Alerts</h3>
-              {alerts.map((alert, index) => (
-                <AlertCard
-                  key={`${alert.id ?? "alert"}-${index}`}
-                  alert={alert}
-                  helper={helperForAlert(alert, alerts, helpers)}
-                />
-              ))}
-            </div>
-          ) : null}
-          {!loading && updatesEmptyCopy({ updates, alerts, hasLikes }) ? (
-            <p>{updatesEmptyCopy({ updates, alerts, hasLikes })}</p>
-          ) : null}
-          {!loading && showDailySection({ updates, alerts, hasLikes }) ? (
-            <div>
-              <h3>Daily updates</h3>
-              {updates.map((update) => {
-                const lines = Array.isArray(update.lines) ? update.lines : [];
-                const newsUrl = typeof update.news_url === "string" && update.news_url ? update.news_url : null;
-                return (
-                  <article className="card" key={update.ticker}>
-                    <h3>{update.ticker}</h3>
-                    {lines.map((line, index) => {
-                      const linked = Boolean(newsUrl) && index === lines.length - 1;
-                      if (linked) {
-                        return (
-                          <p className="row" key={`${update.ticker}-${index}`}>
-                            <a href={newsUrl} target="_blank" rel="noopener noreferrer">{line}</a>
-                          </p>
-                        );
-                      }
-                      return (
-                        <p className="row" key={`${update.ticker}-${index}`}>{line}</p>
-                      );
-                    })}
-                  </article>
-                );
-              })}
-            </div>
+          {!loading ? (
+            <UpdatesFeed
+              updates={updates}
+              alerts={alerts}
+              hasLikes={hasLikes}
+              digest={digest}
+              helpers={helpers}
+            />
           ) : null}
         </section>
       ) : null}
