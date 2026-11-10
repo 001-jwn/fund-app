@@ -72,6 +72,13 @@ export function helperForAlert(alert, alerts, flags) {
   return "";
 }
 
+// A link only when the value itself begins with https://. http, javascript,
+// blank, and missing values stay plain text.
+function filingLink(value) {
+  if (typeof value !== "string" || !value.startsWith("https://")) return "";
+  return value.trim();
+}
+
 // Server order and the server sentence. A missing, null, or non-array list is
 // not a section. An entry without a string line is skipped. The filing date is unused.
 export function filingsFrom(data) {
@@ -87,9 +94,7 @@ export function filingsFrom(data) {
     } else if (typeof item.ticker === "string") {
       name = item.ticker;
     }
-    const url = typeof item.filing_url === "string" && item.filing_url.trim().length > 0
-      ? item.filing_url.trim()
-      : "";
+    const url = filingLink(item.filing_url);
     rows.push({ name, line: item.line, url });
   }
   return rows;

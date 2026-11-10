@@ -412,6 +412,59 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
       },
     },
     {
+      name: "only https filings are links",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [
+          {
+            ticker: "NVDA",
+            short_name: "NVIDIA",
+            line: NVDA_FILING,
+            filing_url: NVDA_URL,
+          },
+          {
+            ticker: "AMD",
+            short_name: "AMD",
+            line: "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.",
+            filing_url: "http://www.sec.gov/Archives/example",
+          },
+          {
+            ticker: "SONY",
+            short_name: "Sony",
+            line: "Sony agreed to acquire Example Co, according to an SEC filing on Nov 3.",
+            filing_url: "javascript:alert(1)",
+          },
+          {
+            ticker: "RBLX",
+            short_name: "Roblox",
+            line: "Roblox confirmed its earlier outlook, according to an SEC filing on Nov 2.",
+            filing_url: null,
+          },
+        ],
+      },
+      check(lines) {
+        const httpLine = "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.";
+        const scriptLine = "Sony agreed to acquire Example Co, according to an SEC filing on Nov 3.";
+        const missingLine = "Roblox confirmed its earlier outlook, according to an SEC filing on Nov 2.";
+        assert.equal(lines.filter((line) => line === FILING_LINK_LABEL).length, 1);
+        assert.equal(lines.filter((line) => line === SEC_FILING_HELPER).length, 1);
+        assert.equal(lines.filter((line) => line === OUTLOOK_HELPER).length, 1);
+        assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
+        assert.ok(lines.indexOf(NVDA_FILING) < lines.indexOf(FILING_LINK_LABEL));
+        assert.ok(lines.indexOf(FILING_LINK_LABEL) < lines.indexOf(httpLine));
+        assert.equal(lines.includes(httpLine), true);
+        assert.equal(lines.includes(scriptLine), true);
+        assert.equal(lines.includes(missingLine), true);
+        assert.ok(lines.indexOf(missingLine) < lines.indexOf(OUTLOOK_HELPER));
+        assert.equal(lines.includes("http://www.sec.gov/Archives/example"), false);
+        assert.equal(lines.includes("javascript:alert(1)"), false);
+      },
+    },
+    {
       name: "outlook helper under the first outlook row",
       props: {
         updates: [],
@@ -481,6 +534,24 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
       const lines = render(item.props);
       item.check(lines);
       if (item.name === "populated digest") populated = lines;
+    }
+    const schemeProps = cases.find((item) => item.name === "only https filings are links").props;
+    const schemeHtml = render.markup(schemeProps);
+    const schemeAnchors = anchorsFrom(schemeHtml).filter((anchor) => anchor.text === FILING_LINK_LABEL);
+    const schemeLines = visibleText(schemeHtml);
+    assert.equal(schemeHtml.includes("javascript:"), false);
+    assert.equal(schemeHtml.includes("http://www.sec.gov"), false);
+    assert.equal(schemeLines.includes(SEC_FILING_HELPER), true);
+    assert.equal(schemeLines.includes(OUTLOOK_HELPER), true);
+    assert.equal(schemeLines.filter((line) => line === FILING_LINK_LABEL).length, 1);
+    if (schemeHtml.includes("<a ")) {
+      assert.deepEqual(schemeAnchors.map((anchor) => anchor.href), [NVDA_URL]);
+      assert.equal(schemeAnchors[0].target, "_blank");
+      assert.match(schemeAnchors[0].rel, /noopener/);
+      assert.match(schemeAnchors[0].rel, /noreferrer/);
+    } else {
+      assert.equal(schemeAnchors.length, 0);
+      assert.equal((schemeHtml.match(/Read the filing/g) || []).length, 1);
     }
     const filingProps = cases.find((item) => item.name === "filings in server order").props;
     const filingHtml = render.markup(filingProps);

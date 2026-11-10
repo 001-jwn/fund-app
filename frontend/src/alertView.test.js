@@ -332,7 +332,7 @@ test("filings stay in server order with the line and link untouched", () => {
         accession: "0000002488-26-000020",
         date_ny: "2026-11-01",
         line: spaced,
-        filing_url: ` ${AMD_URL} `,
+        filing_url: AMD_URL,
       }),
       filingRow(),
     ],
@@ -369,6 +369,37 @@ test("filings stay in server order with the line and link untouched", () => {
   const replaced = filingsFrom({ filings: [filingRow()] });
   assert.deepEqual(replaced, [{ name: "NVIDIA", line: NVDA_FILING, url: NVDA_URL }]);
   assert.deepEqual(filingsFrom({}), []);
+});
+
+test("only an https filing url becomes a link", () => {
+  const httpsLine = "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.";
+  const httpLine = "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.";
+  const scriptLine = "Sony agreed to acquire Example Co, according to an SEC filing on Nov 3.";
+  const missingLine = "Roblox confirmed its earlier outlook, according to an SEC filing on Nov 2.";
+  const rows = filingsFrom({
+    filings: [
+      { ticker: "NVDA", short_name: "NVIDIA", line: httpsLine, filing_url: `${NVDA_URL} ` },
+      { ticker: "AMD", short_name: "AMD", line: httpLine, filing_url: "http://www.sec.gov/Archives/example" },
+      { ticker: "SONY", short_name: "Sony", line: scriptLine, filing_url: "javascript:alert(1)" },
+      { ticker: "RBLX", short_name: "Roblox", line: missingLine },
+    ],
+  });
+  assert.deepEqual(rows, [
+    { name: "NVIDIA", line: httpsLine, url: NVDA_URL },
+    { name: "AMD", line: httpLine, url: "" },
+    { name: "Sony", line: scriptLine, url: "" },
+    { name: "Roblox", line: missingLine, url: "" },
+  ]);
+  assert.equal(
+    filingsFrom({
+      filings: [{ ticker: "NVDA", short_name: "NVIDIA", line: httpsLine, filing_url: ` ${NVDA_URL}` }],
+    })[0].url,
+    ""
+  );
+  const notes = filingHelpers(rows);
+  assert.equal(notes.sec, SEC_FILING_HELPER);
+  assert.equal(notes.outlook, OUTLOOK_HELPER);
+  assert.equal(notes.outlookIndex, 3);
 });
 
 test("a filing with no short name uses the ticker and still keeps a missing link off", () => {
