@@ -91,11 +91,21 @@ class DigestOut(BaseModel):
     empty_line: str | None = None
 
 
+class FilingOut(BaseModel):
+    ticker: str
+    short_name: str
+    accession: str
+    date_ny: str
+    line: str
+    filing_url: str | None = None
+
+
 class UpdatesOut(BaseModel):
     updates: list[UpdateOut]
     alerts: list[AlertOut] = Field(default_factory=list)
     unseen_count: int = 0
     digest: DigestOut
+    filings: list[FilingOut] = Field(default_factory=list)
 
 
 class AlertsSeenIn(BaseModel):

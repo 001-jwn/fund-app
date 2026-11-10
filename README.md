@@ -564,7 +564,11 @@ Checking alerts does not call Finnhub. If the cache has no quote, no earnings da
 
 ## 8-K filings
 
-For US stocks you have liked, the app can save recent SEC Form 8-K and 8-K/A filing details in the background. It does not read those filings when you open Updates. NTES, SONY, SPOT, TM, and RACE are skipped. The saved rows do not include a summary, and they are not shown as confirmed categories. Set `SEC_USER_AGENT` or this step is skipped. If the SEC says no (HTTP 403 or 429), the app stops that run, waits a short time, and does not try to disguise itself.
+For US stocks you have liked, the app can save recent SEC Form 8-K and 8-K/A details in the background, then read the filing text. A plain line is kept only when that text confirms earnings, a deal, a leadership change, or an outlook. An item number alone is not enough. If the text is unclear, the line is left out.
+
+`GET /updates` adds `filings` for those confirmed lines. Opening Updates still does not call the SEC or Finnhub. Each item has the ticker, short name, accession, New York date, the finished line, and the filing link. Unconfirmed filings are not included.
+
+NTES, SONY, SPOT, TM, and RACE are skipped. Set `SEC_USER_AGENT` or this step is skipped. If the SEC says no (HTTP 403 or 429), the app stops that run, waits a short time, and does not try to disguise itself. The rules are in `docs/data/k2a-category-confirmation-rules.md`.
 
 ## Optional: run the automated checks
 
@@ -582,4 +586,4 @@ Windows:
 .venv\Scripts\python.exe -m pytest -q --rootdir=backend backend/tests
 ```
 
-The last line should include `80 passed`.
+The last line should include `101 passed`.

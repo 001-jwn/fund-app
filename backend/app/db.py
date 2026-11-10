@@ -101,6 +101,7 @@ def init_db() -> None:
         configure_engine()
     Base.metadata.create_all(ENGINE)
     _add_missing_company_columns()
+    _add_missing_sec_filing_columns()
 
 
 # Columns added after the first release. create_all does not alter an existing table.
@@ -130,6 +131,43 @@ def _add_missing_company_columns() -> None:
             if name in present:
                 continue
             conn.exec_driver_sql(f"ALTER TABLE companies ADD COLUMN {name} {column_type}")
+
+
+# Columns added for filing-text confirmation. create_all does not alter an existing table.
+_MISSING_SEC_FILING_COLUMNS = (
+    ("measure", "TEXT"),
+    ("figure", "TEXT"),
+    ("exhibit_url", "TEXT"),
+    ("is_quarter", "BOOLEAN"),
+    ("counterparty", "TEXT"),
+    ("side", "VARCHAR(16)"),
+    ("stage", "VARCHAR(16)"),
+    ("asset", "TEXT"),
+    ("person", "TEXT"),
+    ("role", "TEXT"),
+    ("lead_direction", "VARCHAR(16)"),
+    ("resigned_or_retired", "BOOLEAN"),
+    ("eff_date", "VARCHAR(32)"),
+    ("guide_direction", "VARCHAR(16)"),
+    ("period_label", "TEXT"),
+    ("leaders_json", "TEXT"),
+    ("text_outcome", "VARCHAR(24)"),
+)
+
+
+def _add_missing_sec_filing_columns() -> None:
+    """Add filing columns on a SQLite file created before text confirmation."""
+    if ENGINE is None or ENGINE.dialect.name != "sqlite":
+        return
+    with ENGINE.begin() as conn:
+        rows = conn.exec_driver_sql("PRAGMA table_info(sec_filings)").fetchall()
+        if not rows:
+            return
+        present = {row[1] for row in rows}
+        for name, column_type in _MISSING_SEC_FILING_COLUMNS:
+            if name in present:
+                continue
+            conn.exec_driver_sql(f"ALTER TABLE sec_filings ADD COLUMN {name} {column_type}")
 
 
 def get_db() -> Generator[Session, None, None]:

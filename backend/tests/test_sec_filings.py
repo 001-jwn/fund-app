@@ -315,7 +315,7 @@ def test_updates_does_not_call_sec(client, monkeypatch):
     _like(client, user_id, "NVDA")
     response = client.get("/updates", params={"user_id": user_id})
     assert response.status_code == 200
-    assert sorted(response.json()) == ["alerts", "digest", "unseen_count", "updates"]
+    assert sorted(response.json()) == ["alerts", "digest", "filings", "unseen_count", "updates"]
     assert calls == []
 
 
