@@ -1,6 +1,8 @@
 import { Linking, Pressable, Text, View } from "react-native";
 import {
+  FILING_LINK_LABEL,
   alertKindLabel,
+  filingHelpers,
   helperForAlert,
   newsAlertUrl,
   updatesFeed,
@@ -66,16 +68,39 @@ function DailyCard({ update, onLinkError, styles }) {
   );
 }
 
+function FilingCard({ filing, outlook, onLinkError, styles }) {
+  return (
+    <View style={styles.card}>
+      {filing.name ? <Text style={styles.company}>{filing.name}</Text> : null}
+      <Text style={styles.row}>{filing.line}</Text>
+      {filing.url ? (
+        <Pressable
+          onPress={() => {
+            Linking.openURL(filing.url).catch(() => {
+              onLinkError("Could not open that link.");
+            });
+          }}
+        >
+          <Text style={[styles.row, styles.link]}>{FILING_LINK_LABEL}</Text>
+        </Pressable>
+      ) : null}
+      {outlook ? <Text style={styles.helper}>{outlook}</Text> : null}
+    </View>
+  );
+}
+
 export default function UpdatesFeed({
   updates,
   alerts,
   hasLikes,
   digest,
+  filings,
   helpers,
   styles,
   onLinkError,
 }) {
-  const feed = updatesFeed({ updates, alerts, hasLikes, digest });
+  const feed = updatesFeed({ updates, alerts, hasLikes, digest, filings });
+  const filingNotes = filingHelpers(feed.filings);
   return (
     <View>
       {feed.digest.map((block, index) =>
@@ -100,6 +125,21 @@ export default function UpdatesFeed({
         </View>
       ) : null}
       {feed.emptyText ? <Text style={styles.row}>{feed.emptyText}</Text> : null}
+      {feed.filings.length > 0 ? (
+        <View>
+          <Text style={styles.sectionLabel}>SEC filings</Text>
+          {filingNotes.sec ? <Text style={styles.helper}>{filingNotes.sec}</Text> : null}
+          {feed.filings.map((filing, index) => (
+            <FilingCard
+              key={`filing-${index}`}
+              filing={filing}
+              outlook={index === filingNotes.outlookIndex ? filingNotes.outlook : ""}
+              onLinkError={onLinkError}
+              styles={styles}
+            />
+          ))}
+        </View>
+      ) : null}
       {feed.daily.length > 0 ? (
         <View>
           <Text style={styles.sectionLabel}>Daily updates</Text>

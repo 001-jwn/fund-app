@@ -1,5 +1,7 @@
 import {
+  FILING_LINK_LABEL,
   alertKindLabel,
+  filingHelpers,
   helperForAlert,
   newsAlertUrl,
   updatesFeed,
@@ -51,8 +53,24 @@ function DailyCard({ update }) {
   );
 }
 
-export default function UpdatesFeed({ updates, alerts, hasLikes, digest, helpers }) {
-  const feed = updatesFeed({ updates, alerts, hasLikes, digest });
+function FilingCard({ filing, outlook }) {
+  return (
+    <article className="card">
+      {filing.name ? <p className="row">{filing.name}</p> : null}
+      <p className="row">{filing.line}</p>
+      {filing.url ? (
+        <p className="row">
+          <a href={filing.url} target="_blank" rel="noopener noreferrer">{FILING_LINK_LABEL}</a>
+        </p>
+      ) : null}
+      {outlook ? <p className="helper">{outlook}</p> : null}
+    </article>
+  );
+}
+
+export default function UpdatesFeed({ updates, alerts, hasLikes, digest, filings, helpers }) {
+  const feed = updatesFeed({ updates, alerts, hasLikes, digest, filings });
+  const filingNotes = filingHelpers(feed.filings);
   return (
     <div>
       {feed.digest.map((block, index) =>
@@ -75,6 +93,19 @@ export default function UpdatesFeed({ updates, alerts, hasLikes, digest, helpers
         </div>
       ) : null}
       {feed.emptyText ? <p>{feed.emptyText}</p> : null}
+      {feed.filings.length > 0 ? (
+        <div>
+          <h3>SEC filings</h3>
+          {filingNotes.sec ? <p className="helper">{filingNotes.sec}</p> : null}
+          {feed.filings.map((filing, index) => (
+            <FilingCard
+              key={`filing-${index}`}
+              filing={filing}
+              outlook={index === filingNotes.outlookIndex ? filingNotes.outlook : ""}
+            />
+          ))}
+        </div>
+      ) : null}
       {feed.daily.length > 0 ? (
         <div>
           <h3>Daily updates</h3>

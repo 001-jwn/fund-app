@@ -189,6 +189,7 @@ export default function App() {
   const [updates, setUpdates] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [digest, setDigest] = useState(null);
+  const [filings, setFilings] = useState(null);
   const [unseenCount, setUnseenCount] = useState(0);
   const [hasLikes, setHasLikes] = useState(null);
   const [helpers, setHelpers] = useState({ price: false, earnings: false });
@@ -348,6 +349,7 @@ export default function App() {
         setUpdates(nextUpdates);
         setAlerts(nextAlerts);
         setDigest(digestSectionFrom(data, likes));
+        setFilings(data ? data.filings : null);
         setHasLikes(likes);
         setHelpers(nextHelpers);
         setUnseenCount(unseen);
@@ -408,6 +410,7 @@ export default function App() {
     setUpdates([]);
     setAlerts([]);
     setDigest(null);
+    setFilings(null);
     setUnseenCount(0);
     setHasLikes(null);
     setHelpers({ price: false, earnings: false });
@@ -447,6 +450,7 @@ export default function App() {
       await AsyncStorage.setItem(USER_KEY, result.user_id);
       setAlerts([]);
       setDigest(null);
+      setFilings(null);
       setUnseenCount(0);
       setHasLikes(null);
       setHelpers({ price: false, earnings: false });
@@ -601,6 +605,7 @@ export default function App() {
                   alerts={alerts}
                   hasLikes={hasLikes}
                   digest={digest}
+                  filings={filings}
                   helpers={helpers}
                   styles={styles}
                   onLinkError={setError}

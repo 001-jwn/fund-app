@@ -11,6 +11,14 @@ export const PRICE_HELPER =
 
 export const EARNINGS_HELPER = "Companies share their results every three months.";
 
+export const SEC_FILING_HELPER =
+  "An SEC filing is a report a company must send to the US regulator, the Securities and Exchange Commission.";
+
+export const OUTLOOK_HELPER =
+  "An outlook is the company's own estimate of what it expects. It is not a promise.";
+
+export const FILING_LINK_LABEL = "Read the filing";
+
 const KIND_LABELS = {
   price: "Price",
   earnings: "Earnings",
@@ -64,23 +72,79 @@ export function helperForAlert(alert, alerts, flags) {
   return "";
 }
 
+// A link only when the value itself begins with https://. http, javascript,
+// blank, and missing values stay plain text.
+function filingLink(value) {
+  if (typeof value !== "string" || !value.startsWith("https://")) return "";
+  return value.trim();
+}
+
+// Server order and the server sentence. A missing, null, or non-array list is
+// not a section. An entry without a string line is skipped. The filing date is unused.
+export function filingsFrom(data) {
+  const raw = data && data.filings;
+  if (!Array.isArray(raw)) return [];
+  const rows = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    if (typeof item.line !== "string") continue;
+    let name = "";
+    if (typeof item.short_name === "string" && item.short_name.length > 0) {
+      name = item.short_name;
+    } else if (typeof item.ticker === "string") {
+      name = item.ticker;
+    }
+    const url = filingLink(item.filing_url);
+    rows.push({ name, line: item.line, url });
+  }
+  return rows;
+}
+
+// Shown on every render. Nothing is stored. The SEC line sits under the
+// heading when any row is visible. The outlook line sits under the first row
+// whose sentence contains the lowercase substring "outlook".
+export function filingHelpers(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  let outlookIndex = -1;
+  for (let index = 0; index < list.length; index += 1) {
+    const row = list[index];
+    const line = row && row.line;
+    if (typeof line === "string" && line.includes("outlook")) {
+      outlookIndex = index;
+      break;
+    }
+  }
+  if (list.length === 0) {
+    return { sec: "", outlook: "", outlookIndex: -1 };
+  }
+  return {
+    sec: SEC_FILING_HELPER,
+    outlook: outlookIndex >= 0 ? OUTLOOK_HELPER : "",
+    outlookIndex,
+  };
+}
+
 // What the Updates tab shows. digest is the result of digestSectionFrom.
 // A quiet digest replaces the old empty sentence and the empty Daily updates heading.
 // Lines and alerts that are actually present stay on screen.
-export function updatesFeed({ updates, alerts, hasLikes, digest }) {
+export function updatesFeed({ updates, alerts, hasLikes, digest, filings }) {
   const updateList = Array.isArray(updates) ? updates : [];
   const alertList = Array.isArray(alerts)
     ? alerts.filter((alert) => alert && typeof alert === "object")
     : [];
   const digestLines = hasLikes === true ? digestBlocks(digest) : [];
+  const filingList = filingsFrom({ filings });
   let emptyText = "";
   if (updateList.length === 0 && alertList.length === 0) {
     if (hasLikes === false) emptyText = NO_LIKES_COPY;
-    else if (hasLikes === true && digestLines.length === 0) emptyText = NO_NEWS_COPY;
+    else if (hasLikes === true && digestLines.length === 0 && filingList.length === 0) {
+      emptyText = NO_NEWS_COPY;
+    }
   }
   return {
     digest: digestLines,
     alerts: alertList,
+    filings: filingList,
     daily: updateList,
     emptyText,
   };

@@ -6,8 +6,11 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
+  FILING_LINK_LABEL,
   NO_LIKES_COPY,
   NO_NEWS_COPY,
+  OUTLOOK_HELPER,
+  SEC_FILING_HELPER,
   digestSectionFrom,
 } from "./alertView.js";
 
@@ -21,6 +24,29 @@ const RBLX_LINE = "RBLX is up 6.0% (as of Nov 9), at US$40.00.";
 const NVDA_LINE = "NVIDIA is up 3.0% (as of Nov 9), at US$123.45.";
 const AMD_LINE = "AMD is up 2.5% (as of Nov 9), at US$50.00.";
 const ALERT_LINE = "FIXTURE: RBLX is up 6.0% (as of Nov 9).";
+const NVDA_FILING = "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.";
+const AMD_FILING = "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.";
+const NVDA_URL = "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000010/0001045810-26-000010-index.html";
+const AMD_URL = "https://www.sec.gov/Archives/edgar/data/2488/000000248826000020/0000002488-26-000020-index.html";
+
+function anchorsFrom(html) {
+  const found = [];
+  const re = /<a\b([^>]*)>([^<]*)<\/a>/gi;
+  let match;
+  while ((match = re.exec(html))) {
+    const attrs = match[1];
+    const href = /href="([^"]*)"/.exec(attrs);
+    const target = /target="([^"]*)"/.exec(attrs);
+    const rel = /rel="([^"]*)"/.exec(attrs);
+    found.push({
+      text: match[2].replace(/&amp;/g, "&"),
+      href: href ? href[1].replace(/&amp;/g, "&") : "",
+      target: target ? target[1] : "",
+      rel: rel ? rel[1] : "",
+    });
+  }
+  return found;
+}
 
 function section(items, emptyLine) {
   return digestSectionFrom(
@@ -97,12 +123,17 @@ export const StyleSheet = { create: (styles) => styles };
   const loaded = await import(pathToFileURL(outfile).href);
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  return function render(props) {
+  function markup(props) {
     const feedProps = which === "phone"
       ? { ...props, styles: phoneStyles, onLinkError: () => {} }
       : props;
-    return visibleText(renderToStaticMarkup(createElement(loaded.default, feedProps)));
-  };
+    return renderToStaticMarkup(createElement(loaded.default, feedProps));
+  }
+  function render(props) {
+    return visibleText(markup(props));
+  }
+  render.markup = markup;
+  return render;
 }
 
 function assertQuiet(lines) {
@@ -111,6 +142,10 @@ function assertQuiet(lines) {
   assert.equal(lines.includes(NO_NEWS_COPY), false);
   assert.equal(lines.includes("Daily updates"), false);
   assert.equal(lines.includes("Alerts"), false);
+  assert.equal(lines.includes("SEC filings"), false);
+  assert.equal(lines.includes(SEC_FILING_HELPER), false);
+  assert.equal(lines.includes(OUTLOOK_HELPER), false);
+  assert.equal(lines.includes(FILING_LINK_LABEL), false);
 }
 
 function assertNoLikes(lines) {
@@ -119,6 +154,9 @@ function assertNoLikes(lines) {
   assert.equal(lines.includes(HEADER), false);
   assert.equal(lines.includes("Quiet one:"), false);
   assert.equal(lines.includes("Daily updates"), false);
+  assert.equal(lines.includes("SEC filings"), false);
+  assert.equal(lines.includes(SEC_FILING_HELPER), false);
+  assert.equal(lines.includes(OUTLOOK_HELPER), false);
 }
 
 test("website and iPhone Updates feeds render the same quiet, empty, and mixed states", async () => {
@@ -219,6 +257,256 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
       },
     },
     {
+      name: "filings in server order",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [
+          {
+            ticker: "AMD",
+            short_name: "AMD",
+            accession: "0000002488-26-000020",
+            date_ny: "2026-11-01",
+            line: AMD_FILING,
+            filing_url: AMD_URL,
+          },
+          {
+            ticker: "NVDA",
+            short_name: "NVIDIA",
+            accession: "0001045810-26-000010",
+            date_ny: "2026-11-09",
+            line: NVDA_FILING,
+            filing_url: NVDA_URL,
+          },
+        ],
+      },
+      check(lines) {
+        assert.deepEqual(lines.slice(0, 2), [HEADER, QUIET]);
+        assert.deepEqual(
+          lines.filter((line) => (
+            line === "SEC filings"
+            || line === SEC_FILING_HELPER
+            || line === "AMD"
+            || line === "NVIDIA"
+            || line === AMD_FILING
+            || line === NVDA_FILING
+            || line === FILING_LINK_LABEL
+            || line === OUTLOOK_HELPER
+          )),
+          [
+            "SEC filings",
+            SEC_FILING_HELPER,
+            "AMD",
+            AMD_FILING,
+            FILING_LINK_LABEL,
+            "NVIDIA",
+            NVDA_FILING,
+            FILING_LINK_LABEL,
+          ]
+        );
+        assert.equal(lines.filter((line) => line === SEC_FILING_HELPER).length, 1);
+        assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
+        assert.equal(lines.includes(OUTLOOK_HELPER), false);
+        assert.equal(lines.includes("Daily updates"), false);
+        assert.equal(lines.includes("Alerts"), false);
+        assert.equal(lines.includes(NO_NEWS_COPY), false);
+        assert.equal(lines.includes("2026-11-01"), false);
+        assert.equal(lines.includes("2026-11-09"), false);
+        assert.ok(lines.indexOf("SEC filings") > lines.indexOf(QUIET));
+      },
+    },
+    {
+      name: "filings above daily lines",
+      props: {
+        updates: [{ ticker: "RBLX", lines: [RBLX_LINE], news_url: null }],
+        alerts: [{ id: 4, ticker: "RBLX", kind: "price", line: ALERT_LINE, seen: false }],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [
+          {
+            ticker: "NVDA",
+            short_name: "NVIDIA",
+            date_ny: "2026-11-05",
+            line: NVDA_FILING,
+            filing_url: NVDA_URL,
+          },
+        ],
+      },
+      check(lines) {
+        assert.equal(lines.includes(QUIET), true);
+        assert.equal(lines.includes("Alerts"), true);
+        assert.equal(lines.includes("SEC filings"), true);
+        assert.equal(lines.includes(NVDA_FILING), true);
+        assert.equal(lines.includes("Daily updates"), true);
+        assert.equal(lines.includes(RBLX_LINE), true);
+        assert.ok(lines.indexOf("Alerts") < lines.indexOf("SEC filings"));
+        assert.ok(lines.indexOf("SEC filings") < lines.indexOf("Daily updates"));
+        assert.equal(lines.filter((line) => line === "Daily updates").length, 1);
+        assert.equal(lines.filter((line) => line === "SEC filings").length, 1);
+      },
+    },
+    {
+      name: "null filings",
+      props: { updates: [], alerts: [], hasLikes: true, digest: quietDigest, filings: null, helpers: {} },
+      check: assertQuiet,
+    },
+    {
+      name: "empty filings",
+      props: { updates: [], alerts: [], hasLikes: true, digest: quietDigest, filings: [], helpers: {} },
+      check: assertQuiet,
+    },
+    {
+      name: "filings not a list",
+      props: { updates: [], alerts: [], hasLikes: true, digest: quietDigest, filings: { line: NVDA_FILING }, helpers: {} },
+      check: assertQuiet,
+    },
+    {
+      name: "malformed filings",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [null, { ticker: "NVDA", short_name: "NVIDIA", line: 4, filing_url: NVDA_URL }, { ticker: "AMD" }],
+      },
+      check: assertQuiet,
+    },
+    {
+      name: "no likes with empty filings",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: false,
+        digest: { header: HEADER, lines: [], emptyLine: QUIET },
+        filings: [],
+        helpers: {},
+      },
+      check: assertNoLikes,
+    },
+    {
+      name: "filing without a link still shows the line",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: null,
+        helpers: {},
+        filings: [{ ticker: "NVDA", short_name: "NVIDIA", line: NVDA_FILING, filing_url: null, date_ny: "2026-11-05" }],
+      },
+      check(lines) {
+        assert.equal(lines.includes("SEC filings"), true);
+        assert.equal(lines.includes("NVIDIA"), true);
+        assert.equal(lines.includes(NVDA_FILING), true);
+        assert.equal(lines.includes(FILING_LINK_LABEL), false);
+        assert.equal(lines.includes(SEC_FILING_HELPER), true);
+        assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
+        assert.equal(lines.includes(OUTLOOK_HELPER), false);
+        assert.equal(lines.includes(NO_NEWS_COPY), false);
+        assert.equal(lines.includes("Daily updates"), false);
+        assert.equal(lines.includes("2026-11-05"), false);
+      },
+    },
+    {
+      name: "only https filings are links",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [
+          {
+            ticker: "NVDA",
+            short_name: "NVIDIA",
+            line: NVDA_FILING,
+            filing_url: NVDA_URL,
+          },
+          {
+            ticker: "AMD",
+            short_name: "AMD",
+            line: "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.",
+            filing_url: "http://www.sec.gov/Archives/example",
+          },
+          {
+            ticker: "SONY",
+            short_name: "Sony",
+            line: "Sony agreed to acquire Example Co, according to an SEC filing on Nov 3.",
+            filing_url: "javascript:alert(1)",
+          },
+          {
+            ticker: "RBLX",
+            short_name: "Roblox",
+            line: "Roblox confirmed its earlier outlook, according to an SEC filing on Nov 2.",
+            filing_url: null,
+          },
+        ],
+      },
+      check(lines) {
+        const httpLine = "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.";
+        const scriptLine = "Sony agreed to acquire Example Co, according to an SEC filing on Nov 3.";
+        const missingLine = "Roblox confirmed its earlier outlook, according to an SEC filing on Nov 2.";
+        assert.equal(lines.filter((line) => line === FILING_LINK_LABEL).length, 1);
+        assert.equal(lines.filter((line) => line === SEC_FILING_HELPER).length, 1);
+        assert.equal(lines.filter((line) => line === OUTLOOK_HELPER).length, 1);
+        assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
+        assert.ok(lines.indexOf(NVDA_FILING) < lines.indexOf(FILING_LINK_LABEL));
+        assert.ok(lines.indexOf(FILING_LINK_LABEL) < lines.indexOf(httpLine));
+        assert.equal(lines.includes(httpLine), true);
+        assert.equal(lines.includes(scriptLine), true);
+        assert.equal(lines.includes(missingLine), true);
+        assert.ok(lines.indexOf(missingLine) < lines.indexOf(OUTLOOK_HELPER));
+        assert.equal(lines.includes("http://www.sec.gov/Archives/example"), false);
+        assert.equal(lines.includes("javascript:alert(1)"), false);
+      },
+    },
+    {
+      name: "outlook helper under the first outlook row",
+      props: {
+        updates: [],
+        alerts: [],
+        hasLikes: true,
+        digest: quietDigest,
+        helpers: {},
+        filings: [
+          {
+            ticker: "SONY",
+            short_name: "Sony",
+            line: "Sony raised its Outlook for the next quarter, according to an SEC filing on Nov 3.",
+            filing_url: "https://example.com/sony",
+          },
+          {
+            ticker: "NVDA",
+            short_name: "NVIDIA",
+            line: "NVIDIA confirmed its earlier outlook, according to an SEC filing on Nov 5.",
+            filing_url: NVDA_URL,
+          },
+          {
+            ticker: "AMD",
+            short_name: "AMD",
+            line: "AMD updated its outlook for the full year, according to an SEC filing on Nov 4.",
+            filing_url: AMD_URL,
+          },
+        ],
+      },
+      check(lines) {
+        const earlier = "NVIDIA confirmed its earlier outlook, according to an SEC filing on Nov 5.";
+        const later = "AMD updated its outlook for the full year, according to an SEC filing on Nov 4.";
+        assert.equal(lines.filter((line) => line === SEC_FILING_HELPER).length, 1);
+        assert.equal(lines.filter((line) => line === OUTLOOK_HELPER).length, 1);
+        assert.equal(lines.filter((line) => line === FILING_LINK_LABEL).length, 3);
+        assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
+        assert.ok(lines.indexOf(SEC_FILING_HELPER) < lines.indexOf("Sony"));
+        assert.ok(lines.indexOf(earlier) < lines.indexOf(OUTLOOK_HELPER));
+        assert.ok(lines.indexOf(OUTLOOK_HELPER) < lines.indexOf(later));
+        assert.equal(lines.includes("Daily updates"), false);
+      },
+    },
+    {
       name: "mixed alert and daily",
       props: {
         updates: [{ ticker: "RBLX", lines: [RBLX_LINE], news_url: "https://example.com/rblx-fixture" }],
@@ -246,6 +534,40 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
       const lines = render(item.props);
       item.check(lines);
       if (item.name === "populated digest") populated = lines;
+    }
+    const schemeProps = cases.find((item) => item.name === "only https filings are links").props;
+    const schemeHtml = render.markup(schemeProps);
+    const schemeAnchors = anchorsFrom(schemeHtml).filter((anchor) => anchor.text === FILING_LINK_LABEL);
+    const schemeLines = visibleText(schemeHtml);
+    assert.equal(schemeHtml.includes("javascript:"), false);
+    assert.equal(schemeHtml.includes("http://www.sec.gov"), false);
+    assert.equal(schemeLines.includes(SEC_FILING_HELPER), true);
+    assert.equal(schemeLines.includes(OUTLOOK_HELPER), true);
+    assert.equal(schemeLines.filter((line) => line === FILING_LINK_LABEL).length, 1);
+    if (schemeHtml.includes("<a ")) {
+      assert.deepEqual(schemeAnchors.map((anchor) => anchor.href), [NVDA_URL]);
+      assert.equal(schemeAnchors[0].target, "_blank");
+      assert.match(schemeAnchors[0].rel, /noopener/);
+      assert.match(schemeAnchors[0].rel, /noreferrer/);
+    } else {
+      assert.equal(schemeAnchors.length, 0);
+      assert.equal((schemeHtml.match(/Read the filing/g) || []).length, 1);
+    }
+    const filingProps = cases.find((item) => item.name === "filings in server order").props;
+    const filingHtml = render.markup(filingProps);
+    const filingAnchors = anchorsFrom(filingHtml).filter((anchor) => anchor.text === FILING_LINK_LABEL);
+    if (filingHtml.includes("<a ")) {
+      assert.deepEqual(filingAnchors.map((anchor) => anchor.href), [AMD_URL, NVDA_URL]);
+      for (const anchor of filingAnchors) {
+        assert.equal(anchor.target, "_blank");
+        assert.match(anchor.rel, /noopener/);
+      }
+    } else {
+      assert.equal(filingAnchors.length, 0);
+      assert.equal(filingHtml.includes(NVDA_URL), false);
+      assert.equal(filingHtml.includes(FILING_LINK_LABEL), true);
+      assert.equal(filingHtml.includes(SEC_FILING_HELPER), true);
+      assert.equal(filingHtml.includes("Linking"), false);
     }
     const afterUnlike = render({
       updates: [{ ticker: "NVDA", lines: [NVDA_LINE], news_url: null }],
