@@ -15,6 +15,7 @@ import {
   showDailySection,
   unseenCountFrom,
   updatesEmptyCopy,
+  updatesFeed,
   updatesFrom,
   updatesNavLabel,
 } from "./alertView.js";
@@ -64,7 +65,8 @@ test("empty copy follows likes, alerts, and daily lines", () => {
     ""
   );
   assert.equal(showDailySection({ updates: [], alerts: [], hasLikes: false }), false);
-  assert.equal(showDailySection({ updates: [], alerts: [], hasLikes: true }), true);
+  assert.equal(showDailySection({ updates: [], alerts: [], hasLikes: true }), false);
+  assert.equal(showDailySection({ updates: [], alerts: [{ id: 1 }], hasLikes: true }), false);
   assert.equal(showDailySection({ updates: [{ ticker: "SNE" }], alerts: [], hasLikes: true }), true);
 });
 
@@ -209,26 +211,90 @@ test("a header without lines or a quiet line is not its own section", () => {
   assert.deepEqual(digestBlocks({ header: HEADER, lines: [], emptyLine: null }), []);
 });
 
-test("web and phone render the same digest above alerts", () => {
+test("a quiet digest replaces the old empty sentence and empty daily heading", () => {
+  const section = digestSectionFrom(digestPayload([], QUIET), true);
+  const quiet = updatesFeed({ updates: [], alerts: [], hasLikes: true, digest: section });
+  assert.deepEqual(quiet.digest.map((block) => block.text), [HEADER, QUIET]);
+  assert.equal(quiet.emptyText, "");
+  assert.deepEqual(quiet.daily, []);
+  assert.deepEqual(quiet.alerts, []);
+  assert.equal(showDailySection({ updates: [], alerts: [], hasLikes: true, digest: section }), false);
+
+  const withDaily = updatesFeed({
+    updates: [{ ticker: "RBLX", lines: ["RBLX is about flat (as of Nov 9), at US$40.00."] }],
+    alerts: [],
+    hasLikes: true,
+    digest: section,
+  });
+  assert.equal(withDaily.daily.length, 1);
+  assert.equal(withDaily.emptyText, "");
+  assert.equal(withDaily.digest.some((block) => block.text === QUIET), true);
+
+  const withAlert = updatesFeed({
+    updates: [],
+    alerts: [{ id: 9, ticker: "RBLX", kind: "price", line: "FIXTURE alert", seen: false }],
+    hasLikes: true,
+    digest: section,
+  });
+  assert.equal(withAlert.alerts.length, 1);
+  assert.deepEqual(withAlert.daily, []);
+  assert.equal(withAlert.emptyText, "");
+});
+
+test("missing and null digests keep the old no-news sentence and no empty heading", () => {
+  for (const digest of [null, undefined]) {
+    const feed = updatesFeed({ updates: [], alerts: [], hasLikes: true, digest });
+    assert.deepEqual(feed.digest, []);
+    assert.equal(feed.emptyText, NO_NEWS_COPY);
+    assert.deepEqual(feed.daily, []);
+  }
+  const headerOnly = updatesFeed({
+    updates: [],
+    alerts: [],
+    hasLikes: true,
+    digest: digestSectionFrom(digestPayload([], null), true),
+  });
+  assert.deepEqual(headerOnly.digest, []);
+  assert.equal(headerOnly.emptyText, NO_NEWS_COPY);
+});
+
+test("no likes stays a single sentence even if a digest section is passed", () => {
+  const feed = updatesFeed({
+    updates: [],
+    alerts: [],
+    hasLikes: false,
+    digest: { header: HEADER, lines: [], emptyLine: QUIET },
+  });
+  assert.deepEqual(feed.digest, []);
+  assert.equal(feed.emptyText, NO_LIKES_COPY);
+  assert.deepEqual(feed.daily, []);
+  assert.deepEqual(feed.alerts, []);
+});
+
+test("web and phone screens render UpdatesFeed from the latest digest", () => {
   const web = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
   const phone = fs.readFileSync(new URL("../../mobile/App.js", import.meta.url), "utf8");
+  const webFeed = fs.readFileSync(new URL("./UpdatesFeed.jsx", import.meta.url), "utf8");
+  const phoneFeed = fs.readFileSync(new URL("../../mobile/UpdatesFeed.js", import.meta.url), "utf8");
   const view = fs.readFileSync(new URL("./alertView.js", import.meta.url), "utf8");
-  for (const source of [web, phone, view]) {
+  for (const source of [web, phone, view, webFeed, phoneFeed]) {
     assert.equal(source.includes("Quiet one:"), false);
     assert.equal(source.includes("For you,"), false);
     assert.equal(source.includes("more_line"), false);
   }
   for (const source of [web, phone]) {
     assert.match(source, /setDigest\(digestSectionFrom\(data, likes\)\)/);
-    assert.match(source, /\{!loading \? <DigestSection digest=\{digest\} \/> : null\}/);
-    const digestAt = source.indexOf("<DigestSection digest={digest} />");
-    const alertsAt = source.includes("<h3>Alerts</h3>")
-      ? source.indexOf("<h3>Alerts</h3>")
-      : source.indexOf(">Alerts</Text>");
+    assert.match(source, /<UpdatesFeed/);
+    assert.equal(source.includes("Daily updates"), false);
+  }
+  for (const source of [webFeed, phoneFeed]) {
+    assert.match(source, /updatesFeed\(/);
+    const digestAt = source.indexOf("feed.digest");
+    const alertsAt = source.indexOf(">Alerts<");
     const dailyAt = source.indexOf("Daily updates");
     assert.ok(digestAt !== -1 && alertsAt !== -1 && dailyAt !== -1);
     assert.ok(digestAt < alertsAt);
-    assert.ok(digestAt < dailyAt);
+    assert.ok(alertsAt < dailyAt);
   }
 });
 
