@@ -112,6 +112,38 @@ class Alert(Base):
     seen: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class SecFiling(Base):
+    """One EDGAR filing. The accession number is the primary key."""
+
+    __tablename__ = "sec_filings"
+
+    accession: Mapped[str] = mapped_column(String(32), primary_key=True)
+    ticker: Mapped[str] = mapped_column(ForeignKey("companies.ticker"))
+    cik: Mapped[str] = mapped_column(String(10))
+    form: Mapped[str] = mapped_column(String(16))
+    filed_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    accepted_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    items: Mapped[str | None] = mapped_column(Text, nullable=True)
+    h3_candidate: Mapped[bool] = mapped_column(Boolean, default=False)
+    h3_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    filing_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    report_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_plain: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    amends_accession: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+
+class SecFetchState(Base):
+    """TTL timestamps and a short-lived backoff. No secrets."""
+
+    __tablename__ = "sec_fetch_state"
+
+    state_key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    backoff_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    note: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+
 class AlertBaseline(Base):
     __tablename__ = "alert_baselines"
 

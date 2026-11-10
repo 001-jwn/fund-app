@@ -12,6 +12,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///" + db_file.resolve().as_posix())
     monkeypatch.setenv("FINNHUB_API_KEY", "")
     monkeypatch.setenv("FUN_D_FINNHUB_LIVE", "0")
+    monkeypatch.setenv("SEC_USER_AGENT", "")
 
     from app.main import create_app
 

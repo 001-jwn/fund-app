@@ -304,13 +304,22 @@ def _active_tickers() -> list[str]:
 
 
 def _loop() -> None:
+    from app.services.sec_filings import refresh_liked_8k_filings, sec_user_agent_is_set
+
     while not _stop.is_set():
-        if not should_fetch_live():
+        finnhub_on = should_fetch_live()
+        sec_on = sec_user_agent_is_set()
+        if not finnhub_on and not sec_on:
             return
+        if finnhub_on:
+            try:
+                refresh_passes(respect_stop=True)
+            except Exception:
+                logger.exception("Finnhub refresh loop failed")
         try:
-            refresh_passes(respect_stop=True)
+            refresh_liked_8k_filings()
         except Exception:
-            logger.exception("Finnhub refresh loop failed")
+            logger.exception("SEC 8-K refresh failed")
         # Quotes expire after ~5 minutes. A warm disk cache makes the next
         # pass skip network calls that are still fresh.
         _stop.wait(60)
@@ -318,15 +327,23 @@ def _loop() -> None:
 
 def start_refresher() -> None:
     global _thread
-    if not should_fetch_live():
+    from app.services.sec_filings import sec_user_agent_is_set
+
+    finnhub_on = should_fetch_live()
+    sec_on = sec_user_agent_is_set()
+    if not finnhub_on:
         print("Finnhub: off. Price and news will show as unavailable.", flush=True)
+    if not finnhub_on and not sec_on:
         return
     if _thread is not None and _thread.is_alive():
         return
     _stop.clear()
     _thread = threading.Thread(target=_loop, name="finnhub-refresh", daemon=True)
     _thread.start()
-    print("Finnhub: on. Live prices and news will fill in in the background.", flush=True)
+    if finnhub_on:
+        print("Finnhub: on. Live prices and news will fill in in the background.", flush=True)
+    if sec_on:
+        print("SEC 8-K refresh: on.", flush=True)
 
 
 def stop_refresher() -> None:
