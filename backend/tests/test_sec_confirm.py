@@ -327,10 +327,11 @@ def test_mixed_guidance_is_unclear():
         ["7.01"],
         [_doc("The Company raised its revenue outlook for the next quarter and lowered its earnings outlook for the full year.")],
     )
-    assert decision["h3_category"] == "guidance"
-    assert decision["guide_direction"] == "unclear"
-    assert decision["period_label"] is None
-    assert _line(decision) == "NVIDIA updated its outlook, according to an SEC filing on Nov 5."
+    assert decision["h3_category"] is None
+    assert decision["verified"] is False
+    assert decision["hide_reason"] == "ambiguous"
+    assert decision["text_outcome"] != "confirmed"
+    assert _line(decision) is None
 
 
 def test_two_categories_on_one_accession_stay_hidden():

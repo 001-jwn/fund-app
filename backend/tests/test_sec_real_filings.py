@@ -599,6 +599,96 @@ def test_fresh_outlook_range_is_copied_verbatim():
     assert "$89.85" not in bare_line
 
 
+def test_guidance_probe_clear_direction_shows_and_unclear_hides():
+    """QA probe: clear raise/reaffirm may show. Mixed or missing direction stays hidden."""
+    pad = " The filing was furnished to the regulator on the date shown." * 4
+    main = "Item 7.01 Regulation FD Disclosure. The company furnished an exhibit." + pad
+    exhibit_url = "https://www.sec.gov/Archives/edgar/data/1/ex99.htm"
+    accepted = "2026-09-02T20:30:24Z"
+
+    def run(text):
+        decision = decide_filing(
+            ticker="TEST",
+            form="8-K",
+            items=["7.01", "9.01"],
+            accession="0000000000-26-000001",
+            documents=[
+                _doc(main, url="https://www.sec.gov/Archives/edgar/data/1/body.htm"),
+                _doc(text + pad, url=exhibit_url, exhibit="99.1"),
+            ],
+        )
+        line = _line(decision, name="Testco", accepted_at=accepted)
+        return decision, line
+
+    shown, line = run(
+        "Testco raised its outlook for fiscal 2027. "
+        "The company now expects revenue of $89.85 to $90.95 billion for fiscal 2027."
+    )
+    assert shown["h3_category"] == "guidance"
+    assert shown["text_outcome"] == "confirmed"
+    assert line == (
+        "Testco raised its outlook for fiscal 2027, according to an SEC filing on Sep 2. "
+        "The company now expects revenue of $89.85 to $90.95 billion."
+    )
+
+    reaffirmed, line = run(
+        "Testco reaffirmed its outlook for fiscal 2027. "
+        "Revenue is expected to be $89.85 to $90.95 billion."
+    )
+    assert reaffirmed["h3_category"] == "guidance"
+    assert reaffirmed["guide_direction"] == "confirmed"
+    assert line == (
+        "Testco confirmed its earlier outlook for fiscal 2027, according to an SEC filing on Sep 2. "
+        "The company now expects revenue of $89.85 to $90.95 billion."
+    )
+
+    billion_each, line = run(
+        "Testco raised its outlook for fiscal 2027. "
+        "The company now expects revenue of $89.85 billion to $90.95 billion."
+    )
+    assert billion_each["h3_category"] == "guidance"
+    assert billion_each["text_outcome"] == "confirmed"
+    assert line == "Testco raised its outlook for fiscal 2027, according to an SEC filing on Sep 2."
+
+    single, line = run(
+        "Testco raised its outlook for fiscal 2027. "
+        "The company now expects revenue of $90 billion."
+    )
+    assert single["h3_category"] == "guidance"
+    assert line == (
+        "Testco raised its outlook for fiscal 2027, according to an SEC filing on Sep 2. "
+        "The company now expects revenue of $90 billion."
+    )
+
+    for text in (
+        "Testco updated its guidance for fiscal 2027. Revenue is expected to be $90 billion.",
+        "Testco raised its revenue outlook and lowered its margin outlook for fiscal 2027. "
+        "Revenue is expected to be $90 billion.",
+    ):
+        hidden, line = run(text)
+        assert hidden["h3_category"] is None
+        assert hidden["verified"] is False
+        assert hidden["hide_reason"] == "ambiguous"
+        assert hidden["text_outcome"] != "confirmed"
+        assert line is None
+
+    both = (
+        "The company announced financial results for its fiscal 2027 first quarter ended June 30, 2026. "
+        "Diluted earnings per share were $2.10. "
+        "The Company also raised its outlook for the next quarter."
+    )
+    mixed = decide_filing(
+        ticker="TEST",
+        form="8-K",
+        items=["2.02"],
+        accession="0000000000-26-000002",
+        documents=[_doc(both + pad, url=exhibit_url, exhibit="99.1")],
+    )
+    assert mixed["h3_category"] is None
+    assert mixed["hide_reason"] == "two_categories"
+    assert mixed["text_outcome"] != "confirmed"
+
+
 def test_foreign_accession_exhibit_is_never_picked():
     base = "https://www.sec.gov/Archives/edgar/data/1045810/000119312526275783/d48176d8k.htm"
     foreign = (

@@ -170,6 +170,9 @@ def decide_filing(*, ticker: str, form: str, items: list[str], accession: str, d
             reason = None
         return _blank(outcome="unconfirmable", hide_reason=reason)
     found = hits[0]
+    # A clear raise, lower, or reaffirmation can show. Mixed or missing direction cannot.
+    if found.get("h3_category") == "guidance" and found.get("guide_direction") not in {"raised", "lowered", "confirmed"}:
+        return _blank(outcome="unconfirmable", hide_reason="ambiguous")
     found["text_outcome"] = "confirmed"
     found["verified"] = True
     return found
