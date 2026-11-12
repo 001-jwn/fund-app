@@ -56,6 +56,21 @@ _GUIDANCE_LATER = re.compile(
     r"\b(?:will|to)\s+(?:provide|discuss|give|issue)\b[\s\S]{0,120}?\b(?:guidance|outlook)\b",
     re.I,
 )
+# A restated outlook is not a new event. Hide the filing instead of saying "now expects".
+_RESTATED_OUTLOOK = re.compile(
+    r"\bas provided on\b|\bno change to outlook\b|\breiterat(?:e|es|ed|ing)\b",
+    re.I,
+)
+_MONEY = r"\$[\d,]+(?:\.\d+)?"
+_SCALE = r"(?:billion|million|thousand)"
+# The whole amount, including a range and its scale word. Never the first dollar alone.
+_GUIDANCE_FIGURE = re.compile(
+    rf"({_MONEY}\s+to\s+{_MONEY}\s+{_SCALE}"
+    rf"|{_MONEY}\s*[-–—]\s*{_MONEY}\s+{_SCALE}"
+    rf"|between\s+{_MONEY}\s+and\s+{_MONEY}\s+{_SCALE}"
+    rf"|{_MONEY}\s+{_SCALE})",
+    re.I,
+)
 _NEGATION = re.compile(r"\b(?:not|no|never|neither|nor|cannot)\b|n't\b", re.I)
 _EXPLICIT_YEAR = re.compile(r"\b((?:19|20)\d{2})\b")
 _NOT_A_NAME = frozenset({
@@ -147,7 +162,12 @@ def decide_filing(*, ticker: str, form: str, items: list[str], accession: str, d
     if guidance is not None:
         hits.append(guidance)
     if len(hits) != 1:
-        reason = "two_categories" if len(hits) > 1 else None
+        if len(hits) > 1:
+            reason = "two_categories"
+        elif _outlook_is_restated(usable):
+            reason = "ambiguous"
+        else:
+            reason = None
         return _blank(outcome="unconfirmable", hide_reason=reason)
     found = hits[0]
     found["text_outcome"] = "confirmed"
@@ -660,8 +680,40 @@ def _guidance_sentence(sentence: str) -> bool:
     return False
 
 
+def _outlook_is_restated(docs: list[dict]) -> bool:
+    """True when the filing only repeats an earlier outlook."""
+    return any(_RESTATED_OUTLOOK.search(sentence) for sentence in _sentences(_combined(docs)))
+
+
+def _guidance_figure(sentences: list[str]) -> tuple[str | None, str | None]:
+    """One verbatim amount or range, with its scale word. Unclear means no figure."""
+    found: list[tuple[str, str]] = []
+    labels = (
+        (r"diluted earnings per share|earnings per share", "earnings per share"),
+        (r"net income", "net income"),
+        (r"revenue|net sales", "revenue"),
+    )
+    for sentence in sentences:
+        for match in _GUIDANCE_FIGURE.finditer(sentence):
+            figure = re.sub(r"\s+", " ", match.group(1)).strip()
+            window = sentence[max(0, match.start() - 80) : match.start()]
+            measure = None
+            for pattern, name in labels:
+                if re.search(rf"\b(?:{pattern})\b", window, re.I):
+                    measure = name
+                    break
+            if measure:
+                found.append((measure, figure))
+    unique = list(dict.fromkeys(found))
+    if len(unique) == 1:
+        return unique[0]
+    return None, None
+
+
 def _guidance(_items: list[str], docs: list[dict]) -> dict | None:
     """Outlook text confirms guidance on any item list, including a 2.02 earnings release."""
+    if _outlook_is_restated(docs):
+        return None
     sentences = [sentence for sentence in _sentences(_combined(docs)) if _guidance_sentence(sentence)]
     if not sentences:
         return None
@@ -670,12 +722,7 @@ def _guidance(_items: list[str], docs: list[dict]) -> dict | None:
     exhibit = next((doc for doc in docs if doc.get("exhibit") == "99.1"), None)
     measure = figure = exhibit_url = None
     if exhibit is not None:
-        outlook_bits = [
-            sentence
-            for sentence in _sentences(exhibit.get("text") or "")
-            if re.search(r"\b(?:outlook|guidance|expects?)\b", sentence, re.I)
-        ]
-        measure, figure = _pick_figure([{"text": " ".join(outlook_bits), "raw": ""}])
+        measure, figure = _guidance_figure(_sentences(exhibit.get("text") or ""))
         if measure and figure:
             exhibit_url = exhibit.get("url")
         else:

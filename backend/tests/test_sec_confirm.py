@@ -81,7 +81,8 @@ def test_earnings_without_exhibit_or_blocked_exhibit_stays_hidden(client, monkey
             html = (
                 "<html><body><p>Results for the quarter ended September 30, 2026 "
                 "are furnished in Exhibit 99.1.</p>"
-                f"<a href='{EXHIBIT_URL}'>EX-99.1</a>{FILLER}</body></html>"
+                "<table><tr><td>EX-99.1</td><td><a href='ex99_1.htm'>EX-99.1</a></td></tr></table>"
+                f"{FILLER}</body></html>"
             )
             return _Html(html)
         raise urllib.error.HTTPError(request.full_url, 403, "no", hdrs=None, fp=None)
@@ -473,8 +474,8 @@ def test_size_cutoff_and_three_document_limit(client, monkeypatch, tmp_path, cap
         if "CIK" in url:
             return _Json(_two_filings())
         if url.endswith("many.htm"):
-            links = "".join(
-                f"<a href='https://www.sec.gov/Archives/edgar/data/1045810/{name}'>{label}</a>"
+            rows = "".join(
+                f"<tr><td>{label}</td><td><a href='{name}'>{label}</a></td></tr>"
                 for name, label in (
                     ("ex10_1.htm", "EX-10.1"),
                     ("ex99_2.htm", "EX-99.2"),
@@ -482,7 +483,7 @@ def test_size_cutoff_and_three_document_limit(client, monkeypatch, tmp_path, cap
                     ("ex99_1.htm", "EX-99.1"),
                 )
             )
-            return _Html(f"<html><body><p>Cover page.</p>{links}{FILLER}</body></html>")
+            return _Html(f"<html><body><table>{rows}</table>{FILLER}</body></html>")
         if url.endswith("huge.htm"):
             return _Huge(huge_reads)
         if url.endswith("ex99_1.htm"):

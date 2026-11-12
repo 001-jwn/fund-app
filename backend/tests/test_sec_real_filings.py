@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import urllib.error
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -509,3 +510,197 @@ def test_candidate_cap_uses_the_shared_constants_and_logs_only_the_count(client,
     assert rows["0001045810-26-000009"] is False
     assert rows["0001045810-26-000008"] is False
     assert rows["0001045810-26-000007"] is False
+
+
+def test_msft_380280_restated_outlook_stays_hidden():
+    body = plain_text(_read("msft-0001193125-26-380280-body.txt"))
+    exhibit = plain_text(_read("msft-0001193125-26-380280-ex991.txt"))
+    assert "As provided on" in exhibit
+    assert "No change to outlook" in exhibit
+    assert "$89.85 to $90.95 billion" in exhibit
+    decision = decide_filing(
+        ticker="MSFT",
+        form="8-K",
+        items=["7.01", "9.01"],
+        accession="0001193125-26-380280",
+        documents=[
+            _doc(body, url="https://www.sec.gov/Archives/edgar/data/789019/000119312526380280/d291965d8k.htm"),
+            _doc(
+                exhibit,
+                url="https://www.sec.gov/Archives/edgar/data/789019/000119312526380280/d291965dex991.htm",
+                exhibit="99.1",
+            ),
+        ],
+    )
+    assert decision["h3_category"] is None
+    assert decision["verified"] is False
+    assert decision["hide_reason"] == "ambiguous"
+    assert decision["figure"] is None
+    line = _line(decision, name="Microsoft", accepted_at="2026-09-02T20:30:24Z")
+    assert line is None
+    assert "$89.85" not in (line or "")
+
+    restated = (
+        "The Company will reiterate its outlook for the next quarter. "
+        "Revenue is expected to be $10 billion. "
+        + ("The filing repeats an earlier view. " * 4)
+    )
+    again = decide_filing(
+        ticker="MSFT",
+        form="8-K",
+        items=["7.01"],
+        accession="0001193125-26-380280",
+        documents=[_doc(restated, url="https://www.sec.gov/Archives/edgar/data/789019/000119312526380280/ex.htm", exhibit="99.1")],
+    )
+    assert again["h3_category"] is None
+    assert again["hide_reason"] == "ambiguous"
+    assert _line(again, name="Microsoft", accepted_at="2026-09-02T20:30:24Z") is None
+
+
+def test_fresh_outlook_range_is_copied_verbatim():
+    exhibit = (
+        "The Company raised its outlook for the next quarter. "
+        "It expects revenue of $89.85 to $90.95 billion. "
+        + ("No other figure is stated in this release. " * 3)
+    )
+    url = "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000099/ex99.htm"
+    decision = decide_filing(
+        ticker="NVDA",
+        form="8-K",
+        items=["7.01"],
+        accession="0001045810-26-000099",
+        documents=[_doc(exhibit, url=url, exhibit="99.1")],
+    )
+    assert decision["h3_category"] == "guidance"
+    assert decision["figure"] == "$89.85 to $90.95 billion"
+    assert decision["measure"] == "revenue"
+    line = _line(decision, name="NVIDIA", accepted_at="2026-11-06T02:00:00Z")
+    assert line == (
+        "NVIDIA raised its outlook for the next quarter, according to an SEC filing on Nov 5. "
+        "The company now expects revenue of $89.85 to $90.95 billion."
+    )
+
+    bare = (
+        "The Company raised its outlook for the next quarter. "
+        "It expects revenue of $89.85 to $90.95. "
+        + ("No scale word is attached to that range. " * 3)
+    )
+    dropped = decide_filing(
+        ticker="NVDA",
+        form="8-K",
+        items=["7.01"],
+        accession="0001045810-26-000099",
+        documents=[_doc(bare, url=url, exhibit="99.1")],
+    )
+    assert dropped["h3_category"] == "guidance"
+    assert dropped["figure"] is None
+    bare_line = _line(dropped, name="NVIDIA", accepted_at="2026-11-06T02:00:00Z")
+    assert bare_line == "NVIDIA raised its outlook for the next quarter, according to an SEC filing on Nov 5."
+    assert "$89.85" not in bare_line
+
+
+def test_foreign_accession_exhibit_is_never_picked():
+    base = "https://www.sec.gov/Archives/edgar/data/1045810/000119312526275783/d48176d8k.htm"
+    foreign = (
+        "http://www.sec.gov/Archives/edgar/data/1045810/000119312516711700/d260668dex41.htm"
+    )
+    html = f"""
+    <html><body>
+    <p>The notes were issued under an indenture filed as Exhibit 4.1.
+    <a href="{foreign}">d260668dex41.htm</a></p>
+    <table>
+    <tr>
+    <td>4.1</td>
+    <td><a href="{foreign}">Indenture dated 2016</a></td>
+    </tr>
+    <tr>
+    <td>99.1</td>
+    <td><a href="ex99_1.htm">Press release</a></td>
+    </tr>
+    </table>
+    </body></html>
+    """
+    found = _find_exhibits(html, base)
+    assert all("000119312516711700" not in url and "d260668dex41" not in url for _number, url in found)
+    assert found == [(
+        "99.1",
+        "https://www.sec.gov/Archives/edgar/data/1045810/000119312526275783/ex99_1.htm",
+    )]
+    assert _exhibit_number("indenture", "d260668dex41.htm") == "4.1"
+
+
+def test_document_500_backs_off_then_hides(client, monkeypatch, tmp_path):
+    from app.db import SessionLocal, utcnow
+    from app.models import SecFetchState, SecFiling
+    from app.services import sec_filings as sec
+
+    assert sec.DOC_FAIL_BACKOFF == timedelta(hours=6)
+    assert sec.DOC_FAIL_LIMIT == 3
+    user = client.post("/onboarding", json={"interests": ["gaming"]})
+    user_id = user.json()["user_id"]
+    assert client.post("/like", json={"user_id": user_id, "ticker": "NVDA"}).status_code == 200
+    monkeypatch.setenv("SEC_USER_AGENT", "fun(d) contact@example.com")
+    monkeypatch.setattr(sec, "CACHE_DIR", tmp_path / "sec")
+    monkeypatch.setattr(sec.time, "sleep", lambda *_args, **_kwargs: None)
+    accession = "0001193125-26-275783"
+    payload = {
+        "filings": {
+            "recent": {
+                "accessionNumber": [accession],
+                "form": ["8-K"],
+                "filingDate": ["2026-06-18"],
+                "acceptanceDateTime": ["2026-06-18T16:00:00.000Z"],
+                "items": ["8.01"],
+                "primaryDocument": ["d48176d8k.htm"],
+            }
+        }
+    }
+    seen = []
+
+    def urlopen(request, timeout=30):
+        seen.append(request.full_url)
+        url = request.full_url
+        if "company_tickers" in url:
+            return _Json({"0": {"cik_str": 1045810, "ticker": "NVDA", "title": "NVIDIA"}})
+        if "CIK" in url:
+            return _Json(payload)
+        if "d48176d8k" in url:
+            raise urllib.error.HTTPError(url, 500, "err", hdrs=None, fp=None)
+        raise AssertionError(url)
+
+    monkeypatch.setattr(sec.urllib.request, "urlopen", urlopen)
+
+    def expire():
+        session = SessionLocal()
+        row = session.get(SecFetchState, f"docfail:{accession}")
+        row.backoff_until = utcnow() - timedelta(hours=1)
+        session.commit()
+        session.close()
+
+    def outcome():
+        session = SessionLocal()
+        row = session.get(SecFiling, accession)
+        state = session.get(SecFetchState, f"docfail:{accession}")
+        result = (row.text_outcome if row else None, state.note if state else None, state.backoff_until if state else None)
+        session.close()
+        return result
+
+    sec.refresh_liked_8k_filings()
+    assert any("d48176d8k" in url for url in seen)
+    text_outcome, note, until = outcome()
+    assert text_outcome is None
+    assert note == "1"
+    assert until > utcnow() + timedelta(hours=5)
+    seen.clear()
+    sec.refresh_liked_8k_filings()
+    assert not any("d48176d8k" in url for url in seen)
+    expire()
+    sec.refresh_liked_8k_filings()
+    assert outcome()[1] == "2"
+    expire()
+    sec.refresh_liked_8k_filings()
+    assert outcome()[0] == "unconfirmable"
+    assert outcome()[1] == "3"
+    seen.clear()
+    sec.refresh_liked_8k_filings()
+    assert not any("d48176d8k" in url for url in seen)

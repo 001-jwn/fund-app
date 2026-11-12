@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -47,6 +48,8 @@ CIK_MAP_TTL = timedelta(days=30)
 SUBMISSIONS_TTL = timedelta(hours=6)
 DOCUMENT_TTL = timedelta(days=7)
 BACKOFF_TTL = timedelta(minutes=15)
+DOC_FAIL_BACKOFF = timedelta(hours=6)
+DOC_FAIL_LIMIT = 3
 MIN_INTERVAL_SECONDS = 1.0
 MAX_DOCUMENT_BYTES = 2_000_000
 FILING_CAP = 10
@@ -59,12 +62,17 @@ BACKOFF_KEY = "backoff"
 
 _last_request_at = 0.0
 _logged_missing_user_agent = False
+_throttle_lock = threading.Lock()
 
 
 class SecBlocked(Exception):
     def __init__(self, status: int):
         self.status = status
         super().__init__(f"HTTP {status}")
+
+
+class SecFetchFailed(Exception):
+    """A 5xx or timeout for one accession. The run continues with the others."""
 
 
 def sec_user_agent_is_set() -> bool:
@@ -407,7 +415,9 @@ def _confirm_pending(user_agent: str) -> None:
                 "accepted_at": row.accepted_at,
             }
             for row in rows
-            if row.ticker not in SKIP_8K_TICKERS and row.form in KEPT_FORMS
+            if row.ticker not in SKIP_8K_TICKERS
+            and row.form in KEPT_FORMS
+            and not _document_backoff_active(session, row.accession)
         ]
     finally:
         session.close()
@@ -425,6 +435,12 @@ def _confirm_pending(user_agent: str) -> None:
         except SecBlocked as blocked_error:
             _record_backoff(blocked_error.status)
             return
+        except SecFetchFailed:
+            count = _record_document_failure(item["accession"])
+            if count >= DOC_FAIL_LIMIT:
+                _mark_document_unreadable(item["accession"])
+            logger.warning("SEC document fetch failed for %s. failures=%s", item["accession"], count)
+            continue
         except Exception:
             logger.warning("SEC document fetch failed for %s. Keeping prior rows.", item["accession"])
             continue
@@ -542,22 +558,17 @@ def _fetch_one(url: str, user_agent: str, role: str, exhibit: str | None) -> dic
 
 
 def _find_exhibits(html: str, base_url: str) -> list[tuple[str, str]]:
+    """Exhibit links from this filing's index rows, in the same accession folder."""
     found = []
     seen = set()
-
-    def add(exhibit: str | None, href: str) -> None:
+    for exhibit, href in _index_row_exhibits(html):
         if not exhibit or not href:
-            return
+            continue
         url = urllib.parse.urljoin(base_url, href)
-        if not _archive_url(url) or (exhibit, url) in seen:
-            return
+        if not _same_filing_exhibit(url, base_url) or (exhibit, url) in seen:
+            continue
         seen.add((exhibit, url))
         found.append((exhibit, url))
-
-    for exhibit, href in _index_row_exhibits(html):
-        add(exhibit, href)
-    for href, label in _exhibit_anchors(html):
-        add(_exhibit_number(label, href), href)
     return found
 
 
@@ -611,7 +622,10 @@ def _exhibit_anchors(html: str):
         yield match.group(1), label
 
 
-_EXHIBIT_TYPE = re.compile(r"\b(?:EXHIBIT|EX)[\s._-]*(\d{1,3})[.\-_](\d{1,3})\b", re.I)
+_EXHIBIT_TYPE = re.compile(
+    r"^(?:EX(?:HIBIT)?[\s._-]*)?(\d{1,3})[.\-_](\d{1,3})$",
+    re.I,
+)
 
 
 def _exhibit_number(label: str, href: str) -> str | None:
@@ -649,8 +663,9 @@ def _index_row_exhibits(html: str) -> list[tuple[str, str]]:
         number = None
         hrefs: list[str] = []
         for cell in cells:
-            text = re.sub(r"\s+", " ", re.sub(r"(?is)<[^>]+>", " ", cell))
-            match = _EXHIBIT_TYPE.search(text)
+            text = re.sub(r"\s+", " ", re.sub(r"(?is)<[^>]+>", " ", cell)).strip()
+            # A long cell that merely mentions "Exhibit 4.1" is not an index row.
+            match = _EXHIBIT_TYPE.match(text) if len(text) <= 40 else None
             if match and number is None:
                 number = f"{int(match.group(1))}.{int(match.group(2))}"
             hrefs.extend(re.findall(r"""(?is)href=["']([^"']+)["']""", cell))
@@ -680,10 +695,22 @@ def _mentions_exhibit_991(text: str) -> bool:
     return re.search(r"exhibit\s*99\s*[\.\-_]?\s*1", text or "", re.I) is not None
 
 
+def _accession_folder(url: str) -> str | None:
+    for part in urllib.parse.urlparse(url).path.split("/"):
+        if re.fullmatch(r"\d{18}", part):
+            return part
+    return None
+
+
 def _archive_url(url: str) -> bool:
     parsed = urllib.parse.urlparse(url)
     host = (parsed.hostname or "").lower()
-    return host.endswith("sec.gov") and "/Archives/" in parsed.path
+    return parsed.scheme == "https" and host == "www.sec.gov" and "/Archives/" in parsed.path
+
+
+def _same_filing_exhibit(url: str, base_url: str) -> bool:
+    folder = _accession_folder(base_url)
+    return bool(folder) and folder == _accession_folder(url) and _archive_url(url)
 
 
 def _get_bytes(url: str, user_agent: str) -> tuple[str, int, bool]:
@@ -713,8 +740,16 @@ def _get_bytes(url: str, user_agent: str) -> tuple[str, int, bool]:
     except urllib.error.HTTPError as err:
         if err.code in {403, 429}:
             raise SecBlocked(err.code) from err
+        if 500 <= err.code <= 599:
+            raise SecFetchFailed() from err
         if err.code == 404:
             return "", 0, False
+        raise
+    except TimeoutError as err:
+        raise SecFetchFailed() from err
+    except urllib.error.URLError as err:
+        if isinstance(getattr(err, "reason", None), TimeoutError):
+            raise SecFetchFailed() from err
         raise
     raw = b"".join(chunks)
     return raw.decode("utf-8", errors="replace"), len(raw), False
@@ -740,11 +775,56 @@ def _read_chunk(response) -> bytes:
 
 def _throttle() -> None:
     global _last_request_at
-    interval = max(MIN_INTERVAL_SECONDS, 0.1)
-    wait = interval - (time.monotonic() - _last_request_at)
-    if wait > 0:
-        time.sleep(min(wait, interval))
-    _last_request_at = time.monotonic()
+    with _throttle_lock:
+        interval = max(MIN_INTERVAL_SECONDS, 0.1)
+        wait = interval - (time.monotonic() - _last_request_at)
+        if wait > 0:
+            time.sleep(min(wait, interval))
+        _last_request_at = time.monotonic()
+
+
+def _document_state_key(accession: str) -> str:
+    return f"docfail:{accession}"
+
+
+def _document_backoff_active(session, accession: str) -> bool:
+    row = session.get(SecFetchState, _document_state_key(accession))
+    if row is None or row.backoff_until is None:
+        return False
+    return row.backoff_until > utcnow()
+
+
+def _record_document_failure(accession: str) -> int:
+    key = _document_state_key(accession)
+    until = utcnow() + DOC_FAIL_BACKOFF
+    session = dbmod.SessionLocal()
+    try:
+        row = session.get(SecFetchState, key)
+        count = int(row.note) + 1 if row is not None and str(row.note or "").isdigit() else 1
+        if row is None:
+            session.add(SecFetchState(state_key=key, backoff_until=until, note=str(count)))
+        else:
+            row.backoff_until = until
+            row.note = str(count)
+        session.commit()
+        return count
+    finally:
+        session.close()
+
+
+def _mark_document_unreadable(accession: str) -> None:
+    session = dbmod.SessionLocal()
+    try:
+        row = session.get(SecFiling, accession)
+        if row is None or row.text_outcome is not None:
+            return
+        row.text_outcome = "unconfirmable"
+        row.verified = False
+        row.h3_category = None
+        row.summary_plain = None
+        session.commit()
+    finally:
+        session.close()
 
 
 def _accepted_sort(value: str | None) -> str:
