@@ -1,0 +1,9 @@
+Item 8.01. Other Events. 
+On September 2, 2026, NVIDIA Corporation (&#8220;NVIDIA&#8221;) entered into a definitive agreement to acquire Hugging Face, Inc. (&#8220;Hugging Face&#8221;). Hugging Face operates a platform and community for developing, sharing and deploying open-source models, datasets and applications. 
+The transaction includes an approximately $11.9 billion purchase price payable to Hugging Face stockholders, subject to certain adjustments, and an equity-based retention program of up to approximately $1.0 billion for Hugging Face employees joining NVIDIA. 
+The transaction is expected to close in the first half of 2027, subject to the satisfaction or waiver of customary closing conditions, including receipt of required regulatory approvals. 
+NVIDIA expects the acquisition to provide additional resources to Hugging Face and support developers building, sharing and deploying open models and applications. NVIDIA has committed to, among other things, keep Hugging Face&#8217;s platform open, consistent with Hugging Face&#8217;s existing practices. Under this commitment, Hugging Face would continue to permit model makers, developers, and users to upload and download models and datasets of their choosing and to support other silicon vendors. 
+Risks Related to the Proposed Acquisition of Hugging Face 
+The following risk factor supplements, and should be read together with, the risks relating to acquisitions and other risks described in NVIDIA&#8217;s Annual Report on Form 10-K for the fiscal year ended January 25, 2026 and subsequent Quarterly Reports on Form 10-Q. 
+Government restrictions may negatively impact our business and the Hugging Face platform. 
+Demand for open-source foundation models and applications based on them promotes the use of our products world

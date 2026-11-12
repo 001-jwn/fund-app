@@ -6,6 +6,7 @@ category and they never produce a sentence. Unsure means hide.
 
 from __future__ import annotations
 
+import html
 import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -39,18 +40,45 @@ _ACCESSION = re.compile(r"\b\d{10}-\d{2}-\d{6}\b")
 _NAME = r"(?-i:([A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,3}))"
 _OFFICER_ROLE = (
     r"chief executive officer|chief financial officer|\bCEO\b|\bCFO\b|"
+    r"lead independent director|"
     r"board chair|chair of the board|chairman of the board|chairperson of the board"
 )
+# A comma clause may sit between a person's name and the verb ("Jane Doe, the CFO, will...").
+_APPOS = r"(?:\s*,\s*[\s\S]{0,220}?)?"
 # A named executive officer confirms leadership. The phrase is not a job title.
 _NEO = r"(?:\b(?:a|an|its|the)\s+)?\bnamed executive officer\b"
 _REAL_TITLE = re.compile(
-    r"\b(chief [a-z]+ officer|CEO|CFO|COO|"
+    r"\b(chief [a-z]+ officer|CEO|CFO|COO|lead independent director|"
     r"board chair|chair of the board|chairman of the board|chairperson of the board)\b",
+    re.I,
+)
+_GUIDANCE_LATER = re.compile(
+    r"\b(?:will|to)\s+(?:provide|discuss|give|issue)\b[\s\S]{0,120}?\b(?:guidance|outlook)\b",
     re.I,
 )
 _NEGATION = re.compile(r"\b(?:not|no|never|neither|nor|cannot)\b|n't\b", re.I)
 _EXPLICIT_YEAR = re.compile(r"\b((?:19|20)\d{2})\b")
-_NOT_A_NAME = frozenset({"did", "not", "does"})
+_NOT_A_NAME = frozenset({
+    "did",
+    "not",
+    "does",
+    "chief",
+    "financial",
+    "executive",
+    "officer",
+    "president",
+    "vice",
+    "senior",
+    "director",
+    "independent",
+    "lead",
+    "board",
+    "chair",
+    "chairman",
+    "chairperson",
+    "company",
+    "current",
+})
 _BAD_DEAL = re.compile(
     r"\b(?:credit agreement|guarant(?:y|ee)|lease agreement|partnership agreement|"
     r"commercial agreement|supply agreement|license agreement)\b",
@@ -67,14 +95,8 @@ def plain_text(raw: str) -> str:
     text = re.sub(r"(?is)<br\s*/?>", "\n", text)
     text = re.sub(r"(?is)</(?:p|div|tr|h\d|li)>", "\n", text)
     text = re.sub(r"(?is)<[^>]+>", " ", text)
-    text = (
-        text.replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&nbsp;", " ")
-        .replace("&#39;", "'")
-        .replace("&quot;", '"')
-    )
+    # Decode entities before any matcher runs. &#160; and &nbsp; become U+00A0.
+    text = html.unescape(text)
     text = text.replace("\xa0", " ")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n\s+", "\n", text)
@@ -125,7 +147,8 @@ def decide_filing(*, ticker: str, form: str, items: list[str], accession: str, d
     if guidance is not None:
         hits.append(guidance)
     if len(hits) != 1:
-        return blank
+        reason = "two_categories" if len(hits) > 1 else None
+        return _blank(outcome="unconfirmable", hide_reason=reason)
     found = hits[0]
     found["text_outcome"] = "confirmed"
     found["verified"] = True
@@ -162,7 +185,7 @@ def same_line_within_window(left_at: str | None, right_at: str | None) -> bool:
     return abs(left - right) <= DUPLICATE_WINDOW
 
 
-def _blank(outcome: str) -> dict:
+def _blank(outcome: str, hide_reason: str | None = None) -> dict:
     return {
         "text_outcome": outcome,
         "verified": False,
@@ -185,6 +208,7 @@ def _blank(outcome: str) -> dict:
         "guide_direction": None,
         "period_label": None,
         "leaders_json": None,
+        "hide_reason": hide_reason,
     }
 
 
@@ -307,8 +331,13 @@ def _table_pairs(raw: str) -> list[tuple[str, str]]:
     for row in re.findall(r"(?is)<tr\b[^>]*>(.*?)</tr>", raw or ""):
         cells = [plain_text(cell) for cell in re.findall(r"(?is)<t[dh]\b[^>]*>(.*?)</t[dh]>", row)]
         cells = [cell for cell in cells if cell]
-        if len(cells) >= 2:
-            pairs.append((cells[0], cells[1]))
+        if len(cells) < 2:
+            continue
+        # A bare "$" (no digits) is a currency marker, not a figure. Use the next numeric cell.
+        values = [cell for cell in cells[1:] if re.search(r"\d", cell)]
+        if not values:
+            continue
+        pairs.append((cells[0], values[0]))
     return pairs
 
 
@@ -459,6 +488,8 @@ def _leader_in_sentence(sentence: str, filing_year: int | None) -> dict | None:
     role = _OFFICER_ROLE
     leaving = (
         rf"{_NAME}\s+(?:has\s+|will\s+)?resign(?:ed|s)?\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME}\s+will\s+transition\s+from\s+(?:his|her|their)\s+role\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME}{_APPOS}\s+will\s+step\s+down\s+from\s+(?:his|her|their)\s+role(?:\s+as\s+(?:its\s+|the\s+)?({role}))?",
         rf"{_NAME}\s+will\s+(?:retire|step\s+down|transition|leave)(?:\s+from)?(?:\s+the\s+role\s+of)?\s+as\s+(?:its\s+|the\s+)?({role})",
         rf"{_NAME}\s+will\s+step\s+down\s+as\s+(?:its\s+|the\s+)?({role})",
         rf"{_NAME}\s+will\s+transition\s+from\s+(?:the\s+role\s+of\s+)?(?:its\s+|the\s+)?({role})",
@@ -466,9 +497,10 @@ def _leader_in_sentence(sentence: str, filing_year: int | None) -> dict | None:
         rf"{_NAME}\s+(?:has\s+)?retir(?:ed|e|ement)\s+as\s+(?:its\s+|the\s+)?({role})",
     )
     joining = (
-        rf"\bappointed\s+{_NAME}\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"\bappointed\s+{_NAME}{_APPOS}\s+as\s+(?:its\s+|the\s+)?({role})",
         rf"{_NAME}\s+(?:has been|was|will be)\s+appointed\s+as\s+(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}\s+will\s+become\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME}{_APPOS}\s+will\s+assume\s+the\s+role\s+of\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME}{_APPOS}\s+will\s+become\s+(?:its\s+|the\s+)?({role})",
     )
     board_join = rf"\bappointed\s+{_NAME}\s+to\s+(?:its\s+|the\s+)?board of directors|{_NAME}\s+will\s+join\s+(?:its\s+|the\s+)?board of directors"
     board_leave = rf"{_NAME}\s+will\s+(?:leave|resign from)\s+(?:its\s+|the\s+)?board of directors"
@@ -496,10 +528,18 @@ def _leader_in_sentence(sentence: str, filing_year: int | None) -> dict | None:
 
 
 def _matched_leader(pattern: str, sentence: str, direction: str) -> dict | None:
-    match = re.search(pattern, sentence, re.I)
-    if match is None:
-        return None
-    return _leader_fields(match.group(1), match.group(2), direction, sentence)
+    for match in re.finditer(pattern, sentence, re.I):
+        groups = match.groups()
+        person = groups[0]
+        role = groups[1] if len(groups) > 1 else None
+        if not role:
+            role = _real_title(sentence)
+        if not role:
+            continue
+        found = _leader_fields(person, role, direction, sentence)
+        if found:
+            return found
+    return None
 
 
 def _named_executive_officer(sentence: str) -> dict | None:
@@ -591,22 +631,38 @@ def _eff_date(sentence: str) -> str | None:
     return f"{month} {int(match.group(2))}"
 
 
-def _guidance(items: list[str], docs: list[dict]) -> dict | None:
-    if "7.01" not in items and "8.01" not in items:
-        return None
-    sentences = []
-    for sentence in _sentences(_combined(docs)):
-        if re.search(r"\bdividend\b", sentence, re.I) and not re.search(r"\b(?:outlook|guidance)\b", sentence, re.I):
-            continue
-        if re.search(r"\b(?:outlook|guidance)\b", sentence, re.I):
-            sentences.append(sentence)
-            continue
-        if re.search(r"\bexpects?\b", sentence, re.I) and re.search(
-            r"\b(?:next quarter|next year|coming year|fiscal\s+\d{4}|full year|the coming)\b",
-            sentence,
-            re.I,
-        ):
-            sentences.append(sentence)
+def _guidance_sentence(sentence: str) -> bool:
+    """True when the sentence states an outlook, not a promise to give one later."""
+    if re.search(r"\bdividend\b", sentence, re.I) and not re.search(r"\b(?:outlook|guidance)\b", sentence, re.I):
+        return False
+    if _GUIDANCE_LATER.search(sentence):
+        return False
+    if re.search(r"\b(?:outlook|guidance)\b", sentence, re.I) and re.search(
+        r"\b(?:raise[ds]?|raising|lower(?:ed|s)?|lowering|confirm(?:ed|s)?|reaffirm(?:ed|s)?|affirm(?:ed|s)?)\b",
+        sentence,
+        re.I,
+    ):
+        return True
+    if re.search(r"\b(?:outlook|guidance)\s+for\b", sentence, re.I):
+        return True
+    if re.search(r"\b(?:outlook|guidance)\b", sentence, re.I) and re.search(
+        r"\bexpect(?:s|ed)?\s+to\s+be\b|\brevenue\s+is\s+expected\b",
+        sentence,
+        re.I,
+    ):
+        return True
+    if re.search(r"\bexpects?\b", sentence, re.I) and re.search(
+        r"\b(?:next quarter|next year|coming year|fiscal\s+\d{4}|full year|the coming)\b",
+        sentence,
+        re.I,
+    ):
+        return True
+    return False
+
+
+def _guidance(_items: list[str], docs: list[dict]) -> dict | None:
+    """Outlook text confirms guidance on any item list, including a 2.02 earnings release."""
+    sentences = [sentence for sentence in _sentences(_combined(docs)) if _guidance_sentence(sentence)]
     if not sentences:
         return None
     direction = _guide_direction(sentences)

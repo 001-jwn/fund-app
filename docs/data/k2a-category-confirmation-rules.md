@@ -73,7 +73,7 @@ Do not confirm, and do not show a line, when any of these is true:
 - The fetch fails, returns HTTP 403 or 429, or times out.
 - The text is ambiguous.
 - More than one category could be confirmed for the same accession. Examples: item 2.02 results plus an Outlook section (NVDA `0001045810-26-000073`), or item 2.02 plus item 5.02 (UBER `0001543151-26-000011`). Do not pick a winner.
-- The form is 8-K/A. Keep that accession as its own record. Set `amends_accession` only when the amendment text explicitly names the prior accession. Example: AAPL `0001140361-26-035325` names `0001140361-26-015711`. An 8-K/A is never confirmed automatically.
+- The form is 8-K/A. Keep that accession as its own record. Set `amends_accession` only when the amendment text itself gives the prior accession number. AAPL `0001140361-26-035325` only says the Form 8-K filed on April 20, 2026 and does not give an accession number, so `amends_accession` stays null. Do not infer it from the date. An 8-K/A is never confirmed automatically.
 - The text is legal-heavy and has no plain statement.
 - The document is unreadable or too long.
 - Item 5.02 is only compensation or only an election.

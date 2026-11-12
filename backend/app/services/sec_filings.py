@@ -9,11 +9,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from app import db as dbmod
@@ -49,6 +50,9 @@ BACKOFF_TTL = timedelta(minutes=15)
 MIN_INTERVAL_SECONDS = 1.0
 MAX_DOCUMENT_BYTES = 2_000_000
 FILING_CAP = 10
+# One place for the refresh queue: last 12 months, and at most this many newest per ticker.
+CANDIDATE_LOOKBACK_DAYS = 365
+CANDIDATE_LIMIT_PER_TICKER = 10
 
 CACHE_DIR = Path(__file__).resolve().parents[2] / "cache" / "sec"
 BACKOFF_KEY = "backoff"
@@ -344,6 +348,7 @@ def _store_filings(session, ticker: str, cik: str, payload: dict) -> None:
     accessions = recent.get("accessionNumber") if isinstance(recent, dict) else None
     if not isinstance(accessions, list):
         return
+    candidates = _candidate_accessions(recent)
     pending: dict[str, SecFiling] = {}
     for index, raw_accession in enumerate(accessions):
         accession = str(raw_accession or "").strip()
@@ -375,7 +380,7 @@ def _store_filings(session, ticker: str, cik: str, payload: dict) -> None:
         row.filed_at = _text(_at(recent, "filingDate", index))
         row.accepted_at = _text(_at(recent, "acceptanceDateTime", index))
         row.items = items_text
-        row.h3_candidate = h3_candidate_for_items(parse_items(items_text))
+        row.h3_candidate = accession in candidates
         row.filing_url = filing_url
         row.report_url = report_url
 
@@ -406,6 +411,7 @@ def _confirm_pending(user_agent: str) -> None:
         ]
     finally:
         session.close()
+    logger.info("SEC candidate filings queued=%s", len(pending))
     for item in pending:
         session = dbmod.SessionLocal()
         try:
@@ -537,34 +543,121 @@ def _fetch_one(url: str, user_agent: str, role: str, exhibit: str | None) -> dic
 
 def _find_exhibits(html: str, base_url: str) -> list[tuple[str, str]]:
     found = []
-    for match in _exhibit_anchors(html):
-        href, label = match
-        exhibit = _exhibit_number(label, href)
-        if exhibit is None:
-            continue
+    seen = set()
+
+    def add(exhibit: str | None, href: str) -> None:
+        if not exhibit or not href:
+            return
         url = urllib.parse.urljoin(base_url, href)
-        if not _archive_url(url):
-            continue
+        if not _archive_url(url) or (exhibit, url) in seen:
+            return
+        seen.add((exhibit, url))
         found.append((exhibit, url))
+
+    for exhibit, href in _index_row_exhibits(html):
+        add(exhibit, href)
+    for href, label in _exhibit_anchors(html):
+        add(_exhibit_number(label, href), href)
     return found
 
 
-def _exhibit_anchors(html: str):
-    import re
+def _utc_today() -> date:
+    return datetime.now(timezone.utc).date()
 
+
+def _filing_day(value: str | None) -> date | None:
+    if not isinstance(value, str):
+        return None
+    match = re.match(r"(\d{4})-(\d{2})-(\d{2})", value.strip())
+    if match is None:
+        return None
+    try:
+        return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    except ValueError:
+        return None
+
+
+def _candidate_accessions(recent: dict) -> set[str]:
+    """Candidate accessions in one submissions payload: last 12 months, newest first, capped."""
+    accessions = recent.get("accessionNumber") if isinstance(recent, dict) else None
+    if not isinstance(accessions, list):
+        return set()
+    cutoff = _utc_today() - timedelta(days=CANDIDATE_LOOKBACK_DAYS)
+    latest: dict[str, tuple[date, str]] = {}
+    for index, raw_accession in enumerate(accessions):
+        accession = str(raw_accession or "").strip()
+        if not accession:
+            continue
+        form = _at(recent, "form", index)
+        form = form.strip() if isinstance(form, str) else ""
+        if form not in KEPT_FORMS:
+            continue
+        raw_items = _at(recent, "items", index)
+        items_text = raw_items if isinstance(raw_items, str) else None
+        filed = _filing_day(_text(_at(recent, "filingDate", index))) or _filing_day(
+            _text(_at(recent, "acceptanceDateTime", index))
+        )
+        if not h3_candidate_for_items(parse_items(items_text)) or filed is None or filed < cutoff:
+            latest.pop(accession, None)
+            continue
+        latest[accession] = (filed, accession)
+    ranked = sorted(latest.values(), reverse=True)
+    return {accession for _filed, accession in ranked[:CANDIDATE_LIMIT_PER_TICKER]}
+
+
+def _exhibit_anchors(html: str):
     for match in re.finditer(r"(?is)<a\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", html or ""):
         label = re.sub(r"(?is)<[^>]+>", " ", match.group(2))
         yield match.group(1), label
 
 
-def _exhibit_number(label: str, href: str) -> str | None:
-    import re
+_EXHIBIT_TYPE = re.compile(r"\b(?:EXHIBIT|EX)[\s._-]*(\d{1,3})[.\-_](\d{1,3})\b", re.I)
 
+
+def _exhibit_number(label: str, href: str) -> str | None:
+    """Exhibit number from a label or filename.
+
+    `msft-ex99_1.htm` uses a separator. `a8-kex991q4202609262026.htm` does not.
+    """
     blob = f"{label} {href}"
-    match = re.search(r"(?:exhibit|ex)[\s._-]*(\d{1,3})[.\-_](\d{1,3})", blob, re.I)
-    if match is None:
-        return None
-    return f"{int(match.group(1))}.{int(match.group(2))}"
+    separated = re.search(r"(?:exhibit|ex)[\s._-]*(\d{1,3})[.\-_](\d{1,3})", blob, re.I)
+    if separated:
+        return f"{int(separated.group(1))}.{int(separated.group(2))}"
+    glued = re.search(r"(?:exhibit|ex)(\d{1,3})(\d)(?!\d)", blob, re.I)
+    if glued:
+        return f"{int(glued.group(1))}.{int(glued.group(2))}"
+    return None
+
+
+def _preferred_doc_href(hrefs: list[str]) -> str | None:
+    docs = [href for href in hrefs if re.search(r"\.html?(?:$|\?)", href, re.I)]
+    plain = [href for href in docs if "ix?" not in href.lower() and not href.lower().startswith("/ix")]
+    if plain:
+        return plain[0]
+    if docs:
+        return docs[0]
+    return None
+
+
+def _index_row_exhibits(html: str) -> list[tuple[str, str]]:
+    """Pair a filing-index Type cell such as EX-99.1 with that row's document link."""
+    found = []
+    for row in re.findall(r"(?is)<tr\b[^>]*>(.*?)</tr>", html or ""):
+        cells = re.findall(r"(?is)<t[dh]\b[^>]*>(.*?)</t[dh]>", row)
+        if not cells:
+            continue
+        number = None
+        hrefs: list[str] = []
+        for cell in cells:
+            text = re.sub(r"\s+", " ", re.sub(r"(?is)<[^>]+>", " ", cell))
+            match = _EXHIBIT_TYPE.search(text)
+            if match and number is None:
+                number = f"{int(match.group(1))}.{int(match.group(2))}"
+            hrefs.extend(re.findall(r"""(?is)href=["']([^"']+)["']""", cell))
+        href = _preferred_doc_href(hrefs)
+        if number and href:
+            found.append((number, href))
+    return found
 
 
 def _pick_exhibits(found: list[tuple[str, str]]) -> list[tuple[str, str]]:
