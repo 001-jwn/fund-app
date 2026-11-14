@@ -646,6 +646,62 @@ def test_announcement_date_does_not_replace_an_effective_date():
     assert undated["eff_date"] is None
 
 
+def test_earlier_board_announcement_without_an_effective_date_is_hidden():
+    filed = "2026-11-05T16:00:00Z"
+    for sentence in (
+        "On May 1, 2026, the Board appointed Jane Doe as CFO.",
+        "On May 1, 2026, the Board elected Jane Doe as chief financial officer.",
+        "On May 1, 2026, the Board named Jane Doe as chief financial officer.",
+    ):
+        decision = _person(sentence)
+        line = build_summary(
+            category=decision.get("h3_category"),
+            form="8-K",
+            accepted_at=filed,
+            name="NVIDIA",
+            fields=decision,
+        )
+        assert line is None
+        assert decision["h3_category"] is None
+        assert decision["person"] is None
+        assert decision["eff_date"] is None
+        assert "will become" not in (line or "")
+
+    same_day = _person("On November 5, 2026, the Board appointed Jane Doe as chief financial officer.")
+    same_line = build_summary(
+        category=same_day.get("h3_category"),
+        form="8-K",
+        accepted_at=filed,
+        name="NVIDIA",
+        fields=same_day,
+    )
+    assert same_line == "NVIDIA announced that Jane Doe will become its chief financial officer."
+
+
+def test_one_contradictory_sentence_hides_the_whole_filing():
+    decision = _decide(
+        ["5.02"],
+        [_doc(
+            "Jane Doe resigned as chief financial officer effective December 1, 2026. "
+            "The Company appointed John Smith as chief financial officer."
+        )],
+    )
+    assert decision["h3_category"] == "leadership"
+    line = build_summary(
+        category=decision.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-05T16:00:00Z",
+        name="NVIDIA",
+        fields=decision,
+    )
+    assert line is None
+    assert "Jane Doe" not in (line or "")
+    assert "John Smith" not in (line or "")
+    assert decision["h3_category"] is None
+    assert decision["person"] is None
+    assert decision["leaders_json"] is None
+
+
 def test_february_29_hides_unless_the_chosen_year_is_a_leap_year():
     explicit = _person(
         "The Company appointed Ada Lovelace as chief financial officer effective February 29, 2027."

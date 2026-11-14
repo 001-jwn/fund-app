@@ -538,6 +538,7 @@ def _leadership(items: list[str], docs: list[dict], filing_year: int | None) -> 
     result["h3_category"] = "leadership"
     result["verified"] = True
     if len(people) >= 3:
+        result["_leaders"] = people
         return result
     if len(people) == 1:
         result.update(people[0])
@@ -735,6 +736,14 @@ def _leader_fields(
         return None
     resigned = bool(re.search(r"\b(?:resign|resigned|retire|retired|retirement)\b", sentence, re.I))
     shown, year = _eff_date(sentence)
+    board_on_date, board_on_year = None, None
+    fragment = matched or ""
+    if (
+        re.search(r"\b(?:appointed|elected|named)\b", fragment, re.I)
+        and not re.search(r"\bwill\b", fragment, re.I)
+        and not re.search(r"\b(?:effective|starting|as\s+of)\b", sentence, re.I)
+    ):
+        board_on_date, board_on_year = _leading_on_date(sentence)
     return {
         "person": cleaned,
         "role": stored,
@@ -742,7 +751,9 @@ def _leader_fields(
         "resigned_or_retired": resigned,
         "eff_date": shown,
         "eff_year": year,
-        "verb_timing": _verb_timing(matched or sentence),
+        "verb_timing": _verb_timing(fragment or sentence),
+        "board_on_date": board_on_date,
+        "board_on_year": board_on_year,
     }
 
 
@@ -754,6 +765,13 @@ def _role_case(role: str) -> str:
         else:
             words.append(word.lower())
     return " ".join(words)
+
+
+def _leading_on_date(sentence: str) -> tuple[str | None, int | None]:
+    match = re.match(r"On\s+([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})\b", sentence.strip(), re.I)
+    if match is None:
+        return None, None
+    return _shown_date(match.group(1), match.group(2), match.group(3))
 
 
 def _shown_date(month_word: str, day_text: str, year_text: str | None) -> tuple[str | None, int | None]:
@@ -1007,8 +1025,38 @@ def _clear_leadership(fields: dict) -> None:
         "eff_year",
         "leaders_json",
         "verb_timing",
+        "board_on_date",
+        "board_on_year",
     ):
         fields[key] = None
+    fields.pop("_leaders", None)
+
+
+def _stale_board_announcement(person: dict, filing_iso: str | None) -> bool:
+    """A board appointment whose only date is an earlier "On" announcement date."""
+    shown = person.get("board_on_date")
+    if not shown or not filing_iso:
+        return False
+    placed = _placed_effective(shown, person.get("board_on_year"), filing_iso)
+    if not isinstance(placed, date):
+        return False
+    return placed < datetime.fromisoformat(filing_iso).date()
+
+
+def _leader_roster(fields: dict) -> list[dict]:
+    people = fields.get("leaders_json")
+    if isinstance(people, list) and people:
+        return [person for person in people if isinstance(person, dict)]
+    extra = fields.get("_leaders")
+    if isinstance(extra, list) and extra:
+        return [person for person in extra if isinstance(person, dict)]
+    if fields.get("person") and fields.get("role"):
+        return [fields]
+    return []
+
+
+def _sentence_contradicts(person: dict, filing_iso: str | None) -> bool:
+    return _tense_hides(person, filing_iso) or _stale_board_announcement(person, filing_iso)
 
 
 def _tense_hides(person: dict, filing_iso: str | None) -> bool:
@@ -1061,6 +1109,9 @@ def _deal_line(name: str, phrase: str, pretty: str, fields: dict) -> str:
 
 
 def _leadership_line(name: str, phrase: str, pretty: str, fields: dict, filing_iso: str | None = None) -> str | None:
+    if any(_sentence_contradicts(person, filing_iso) for person in _leader_roster(fields)):
+        _clear_leadership(fields)
+        return None
     people = fields.get("leaders_json")
     if isinstance(people, list) and people:
         sentences = []
@@ -1071,9 +1122,9 @@ def _leadership_line(name: str, phrase: str, pretty: str, fields: dict, filing_i
                 blocked = True
                 impossible = True
                 continue
-            if _tense_hides(person, filing_iso):
-                blocked = True
-                continue
+            if _sentence_contradicts(person, filing_iso):
+                _clear_leadership(fields)
+                return None
             sentence = _one_leader_line(name, person, filing_iso)
             if sentence:
                 sentences.append(sentence)
@@ -1086,7 +1137,8 @@ def _leadership_line(name: str, phrase: str, pretty: str, fields: dict, filing_i
     elif _impossible_effective(fields, filing_iso):
         _clear_leadership(fields)
         return None
-    elif _tense_hides(fields, filing_iso):
+    elif _sentence_contradicts(fields, filing_iso):
+        _clear_leadership(fields)
         return None
     if fields.get("person") and fields.get("role") and fields.get("lead_direction"):
         sentence = _one_leader_line(name, fields, filing_iso)
@@ -1101,7 +1153,7 @@ def _one_leader_line(name: str, person: dict, filing_iso: str | None = None) -> 
     direction = person.get("lead_direction")
     if not who or not role or direction not in {"joining", "leaving"}:
         return None
-    if _impossible_effective(person, filing_iso) or _tense_hides(person, filing_iso):
+    if _impossible_effective(person, filing_iso) or _sentence_contradicts(person, filing_iso):
         return None
     eff = person.get("eff_date")
     past = _eff_on_or_before(eff, person.get("eff_year"), filing_iso)
