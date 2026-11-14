@@ -205,8 +205,15 @@ def test_named_officer_change_step_down_is_not_resigned():
     assert stepped["lead_direction"] == "leaving"
     assert stepped["resigned_or_retired"] is False
     assert stepped["eff_date"] == "Sep 1"
-    assert _line(stepped) == "NVIDIA announced that Jane Doe left the role of chief executive officer on Sep 1."
-    assert "step down" not in _line(stepped)
+    stepped_line = build_summary(
+        category=stepped.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-09-04T16:00:00Z",
+        name="NVIDIA",
+        fields=stepped,
+    )
+    assert stepped_line == "NVIDIA announced that Jane Doe left the role of chief executive officer on Sep 1."
+    assert "step down" not in stepped_line
 
     moved = _decide(
         ["5.02"],
@@ -363,6 +370,11 @@ def test_effective_date_without_a_year_uses_the_nearest_year():
     )
     assert leap_line is None
     assert "Feb 29" not in (leap_line or "")
+    assert leap["eff_date"] is None
+    assert leap["person"] is None
+    assert leap["h3_category"] is None
+    assert leap["role"] is None
+    assert leap["lead_direction"] is None
 
     december = _person("The Company appointed Ada Lovelace as chief financial officer effective December 31.")
     december_line = build_summary(
@@ -497,8 +509,16 @@ def test_leading_date_clause_is_not_part_of_the_name():
         name="NVIDIA",
         fields=lead,
     )
-    assert "Effective" not in line
-    assert line == "NVIDIA announced that Jane Doe left the role of chief financial officer on May 1."
+    assert line is None
+
+    written = _person("Effective May 1, 2026, Jane Doe resigned as chief financial officer.")
+    assert written["person"] == "Jane Doe"
+    written_line = _line(written)
+    assert written_line == (
+        "NVIDIA announced that Jane Doe stepped down from the role of chief financial officer on May 1."
+    )
+    assert "Effective" not in written["person"]
+    assert "Effective" not in written_line
 
 
 def test_honorifics_are_not_part_of_the_name():
@@ -568,7 +588,206 @@ def test_past_effective_date_uses_past_tense_leadership_lines():
     assert _line(joined) == "NVIDIA announced that Mary Smith joined its board of directors on Sep 1."
 
     left = _person("Mary Smith will leave the board of directors effective September 1, 2026.")
-    assert _line(left) == "NVIDIA announced that Mary Smith left its board of directors on Sep 1."
+    assert _line(left) is None
+
+    recent = _person("Mary Smith will leave the board of directors effective September 1, 2026.")
+    recent_line = build_summary(
+        category=recent.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-09-04T16:00:00Z",
+        name="NVIDIA",
+        fields=recent,
+    )
+    assert recent_line == "NVIDIA announced that Mary Smith left its board of directors on Sep 1."
+
+
+def test_announcement_date_does_not_replace_an_effective_date():
+    accepted = "2026-11-06T02:00:00Z"
+    step = _person(
+        "On November 3, 2026, the Company announced that Jane Doe will step down "
+        "as chief financial officer effective December 31, 2026."
+    )
+    step_line = build_summary(
+        category=step.get("h3_category"),
+        form="8-K",
+        accepted_at=accepted,
+        name="NVIDIA",
+        fields=step,
+    )
+    assert step_line.endswith("starting Dec 31.")
+    assert "Nov 3" not in step_line
+
+    hired = _person(
+        "On May 1, 2026, the Board appointed Jane Doe as chief financial officer effective June 1, 2026."
+    )
+    hired_line = build_summary(
+        category=hired.get("h3_category"),
+        form="8-K",
+        accepted_at=accepted,
+        name="NVIDIA",
+        fields=hired,
+    )
+    assert hired_line.endswith(" on Jun 1.")
+    assert "May 1" not in hired_line
+
+    undated = _person(
+        "On November 3, 2026, the Company announced that Jane Doe will become its chief financial officer."
+    )
+    undated_line = build_summary(
+        category=undated.get("h3_category"),
+        form="8-K",
+        accepted_at=accepted,
+        name="NVIDIA",
+        fields=undated,
+    )
+    assert undated_line == "NVIDIA announced that Jane Doe will become its chief financial officer."
+    assert "became" not in undated_line
+    assert "Nov 3" not in undated_line
+    assert undated["eff_date"] is None
+
+
+def test_february_29_hides_unless_the_chosen_year_is_a_leap_year():
+    explicit = _person(
+        "The Company appointed Ada Lovelace as chief financial officer effective February 29, 2027."
+    )
+    assert explicit["h3_category"] is None
+    assert explicit["person"] is None
+    assert explicit["eff_date"] is None
+    assert _line(explicit) is None
+
+    yearless = _person("The Company appointed Ada Lovelace as chief financial officer effective February 29.")
+    yearless_line = build_summary(
+        category=yearless.get("h3_category"),
+        form="8-K",
+        accepted_at="2027-01-04T21:00:00Z",
+        name="NVIDIA",
+        fields=yearless,
+    )
+    assert yearless_line is None
+    assert "Feb 29" not in (yearless_line or "")
+    assert yearless["eff_date"] is None
+    assert yearless["person"] is None
+    assert yearless["role"] is None
+    assert yearless["lead_direction"] is None
+    assert yearless["h3_category"] is None
+
+    leap = _person(
+        "The Company appointed Ada Lovelace as chief financial officer effective February 29, 2028."
+    )
+    leap_line = build_summary(
+        category=leap.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-06T02:00:00Z",
+        name="NVIDIA",
+        fields=leap,
+    )
+    assert leap_line == (
+        "NVIDIA announced that Ada Lovelace will become its chief financial officer, starting Feb 29."
+    )
+
+
+def test_verb_tense_stays_consistent_with_the_effective_date():
+    early = _person(
+        "Jane Doe will step down as chief financial officer effective May 1, 2026."
+    )
+    early_line = build_summary(
+        category=early.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-05-04T16:00:00Z",
+        name="NVIDIA",
+        fields=early,
+    )
+    assert early_line == (
+        "NVIDIA announced that Jane Doe left the role of chief financial officer on May 1."
+    )
+
+    stale = _person(
+        "Jane Doe will step down as chief financial officer effective May 1, 2026."
+    )
+    stale_line = build_summary(
+        category=stale.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-05-20T16:00:00Z",
+        name="NVIDIA",
+        fields=stale,
+    )
+    assert stale_line is None
+
+    later = _person(
+        "Jane Doe resigned as chief financial officer effective June 1, 2026."
+    )
+    later_line = build_summary(
+        category=later.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-05-04T16:00:00Z",
+        name="NVIDIA",
+        fields=later,
+    )
+    assert later_line is None
+
+    retired = _person(
+        "Jane Doe retired as chief financial officer effective December 1, 2026."
+    )
+    retired_line = build_summary(
+        category=retired.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-05T16:00:00Z",
+        name="NVIDIA",
+        fields=retired,
+    )
+    assert retired_line is None
+
+    left = _person("Jane Doe left the Company effective December 1, 2026.")
+    left_line = build_summary(
+        category=left.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-05T16:00:00Z",
+        name="NVIDIA",
+        fields=left,
+    )
+    assert left_line is None
+
+    elected = _person(
+        "The Board elected Jane Doe as chief financial officer effective June 1, 2026."
+    )
+    elected_line = build_summary(
+        category=elected.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-05-04T16:00:00Z",
+        name="NVIDIA",
+        fields=elected,
+    )
+    assert elected_line == (
+        "NVIDIA announced that Jane Doe will become its chief financial officer, starting Jun 1."
+    )
+
+    named = _person(
+        "The Board named Jane Doe as chief financial officer effective June 1, 2026."
+    )
+    named_line = build_summary(
+        category=named.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-05-04T16:00:00Z",
+        name="NVIDIA",
+        fields=named,
+    )
+    assert named_line == (
+        "NVIDIA announced that Jane Doe will become its chief financial officer, starting Jun 1."
+    )
+
+    appointed = _person(
+        "The Board appointed Jane Doe as chief financial officer effective June 1, 2026."
+    )
+    appointed_line = build_summary(
+        category=appointed.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-05-04T16:00:00Z",
+        name="NVIDIA",
+        fields=appointed,
+    )
+    assert appointed_line == (
+        "NVIDIA announced that Jane Doe will become its chief financial officer, starting Jun 1."
+    )
 
 
 def test_negated_leadership_sentence_stays_hidden():

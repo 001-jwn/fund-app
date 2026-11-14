@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import html
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 NEW_YORK = ZoneInfo("America/New_York")
@@ -50,7 +50,7 @@ _NAME_INNER = rf"(?:{_NAME_PARTICLE}|{_NAME_INITIAL}|{_NAME_WORD})"
 _NAME = rf"(?-i:({_NAME_WORD}(?:{_WORD_GAP}{_NAME_INNER}){{0,5}}(?:{_SUFFIX_GAP}{_NAME_SUFFIX})?))"
 _DATE_LEAD = (
     r"(?:On\s+[A-Za-z]+\s+\d{1,2},\s+\d{4},\s+"
-    r"|(?:[Ee]ffective|[Ss]tarting)\s+[A-Za-z]+\s+\d{1,2},\s+)"
+    r"|(?:[Ee]ffective|[Ss]tarting|[Aa]s\s+of)\s+[A-Za-z]+\s+\d{1,2}(?:,\s+\d{4})?,\s+)"
 )
 _HONORIFIC = r"(?:Mr|Ms|Mrs|Dr)\.\s+"
 # The name starts after a date clause or an honorific, or at the sentence / "that".
@@ -571,15 +571,16 @@ def _leader_in_sentence(sentence: str, filing_year: int | None) -> dict | None:
         rf"{_NAME_BOUND}{_NAME}\s+will\s+transition\s+from\s+(?:the\s+role\s+of\s+)?(?:its\s+|the\s+)?({role})",
         rf"{_NAME_BOUND}{_NAME}\s+will\s+leave\s+(?:the\s+role\s+of\s+)?(?:its\s+|the\s+)?({role})",
         rf"{_NAME_BOUND}{_NAME}\s+(?:has\s+)?retir(?:ed|e|ement)\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}\s+left\s+the\s+(company)\b",
     )
     joining = (
-        rf"\bappointed\s+(?:{_HONORIFIC})?{_NAME}{_APPOS}\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"\b(?:appointed|elected|named)\s+(?:{_HONORIFIC})?{_NAME}{_APPOS}\s+as\s+(?:its\s+|the\s+)?({role})",
         rf"{_NAME_BOUND}{_NAME}\s+(?:has been|was|will be)\s+appointed\s+as\s+(?:its\s+|the\s+)?({role})",
         rf"{_NAME_BOUND}{_NAME}{_APPOS}\s+will\s+assume\s+the\s+role\s+of\s+(?:its\s+|the\s+)?({role})",
         rf"{_NAME_BOUND}{_NAME}{_APPOS}\s+will\s+become\s+(?:its\s+|the\s+)?({role})",
     )
     board_join = (
-        rf"\bappointed\s+(?:{_HONORIFIC})?{_NAME}\s+to\s+(?:its\s+|the\s+)?board of directors"
+        rf"\b(?:appointed|elected|named)\s+(?:{_HONORIFIC})?{_NAME}\s+to\s+(?:its\s+|the\s+)?board of directors"
         rf"|{_NAME_BOUND}{_NAME}\s+will\s+join\s+(?:its\s+|the\s+)?board of directors"
     )
     board_leave = rf"{_NAME_BOUND}{_NAME}\s+will\s+(?:leave|resign from)\s+(?:its\s+|the\s+)?board of directors"
@@ -595,12 +596,12 @@ def _leader_in_sentence(sentence: str, filing_year: int | None) -> dict | None:
     if match:
         person = next((group for group in match.groups() if group), None)
         if person:
-            found = _leader_fields(person, "board of directors", "joining", sentence)
+            found = _leader_fields(person, "board of directors", "joining", sentence, match.group(0))
             if found:
                 return found
     match = re.search(board_leave, sentence, re.I)
     if match:
-        found = _leader_fields(match.group(1), "board of directors", "leaving", sentence)
+        found = _leader_fields(match.group(1), "board of directors", "leaving", sentence, match.group(0))
         if found:
             return found
     return _named_executive_officer(sentence)
@@ -615,7 +616,7 @@ def _matched_leader(pattern: str, sentence: str, direction: str) -> dict | None:
             role = _real_title(sentence)
         if not role:
             continue
-        found = _leader_fields(person, role, direction, sentence)
+        found = _leader_fields(person, role, direction, sentence, match.group(0))
         if found:
             return found
     return None
@@ -636,7 +637,7 @@ def _named_executive_officer(sentence: str) -> dict | None:
         match = re.search(pattern, sentence, re.I)
         if match is None:
             continue
-        found = _leader_fields(match.group(1), _real_title(sentence), direction, sentence)
+        found = _leader_fields(match.group(1), _real_title(sentence), direction, sentence, match.group(0))
         if found:
             return found
     return None
@@ -700,7 +701,27 @@ def _valid_person_name(name: str) -> bool:
     return words >= 2
 
 
-def _leader_fields(person: str, role: str | None, direction: str, sentence: str) -> dict | None:
+def _verb_timing(fragment: str) -> str | None:
+    """Future "will", a person's past leaving verb, or neither (a board action)."""
+    if re.search(r"\bwill\b", fragment, re.I):
+        return "future"
+    if re.search(
+        r"\b(?:resign(?:ed|s|ation)?|retir(?:ed|es|ing|ement)?|stepped\s+down|left|"
+        r"depart(?:ed|s)?|ceased\s+to\s+serve|was\s+removed)\b",
+        fragment,
+        re.I,
+    ):
+        return "past_leaving"
+    return None
+
+
+def _leader_fields(
+    person: str,
+    role: str | None,
+    direction: str,
+    sentence: str,
+    matched: str | None = None,
+) -> dict | None:
     cleaned = person.replace("\u00a0", " ")
     cleaned = re.sub(r" +", " ", cleaned).strip()
     if not _valid_person_name(cleaned):
@@ -721,6 +742,7 @@ def _leader_fields(person: str, role: str | None, direction: str, sentence: str)
         "resigned_or_retired": resigned,
         "eff_date": shown,
         "eff_year": year,
+        "verb_timing": _verb_timing(matched or sentence),
     }
 
 
@@ -734,19 +756,7 @@ def _role_case(role: str) -> str:
     return " ".join(words)
 
 
-def _eff_date(sentence: str) -> tuple[str | None, int | None]:
-    match = re.search(
-        r"\b(?:effective|starting)\s+([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?"
-        r"|\bOn\s+([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})",
-        sentence,
-        re.I,
-    )
-    if match is None:
-        return None, None
-    if match.group(1):
-        month_word, day_text, year_text = match.group(1), match.group(2), match.group(3)
-    else:
-        month_word, day_text, year_text = match.group(4), match.group(5), match.group(6)
+def _shown_date(month_word: str, day_text: str, year_text: str | None) -> tuple[str | None, int | None]:
     month = _FULL_MONTHS.get(month_word.lower())
     if month is None:
         return None, None
@@ -754,9 +764,46 @@ def _eff_date(sentence: str) -> tuple[str | None, int | None]:
     return f"{month} {int(day_text)}", year
 
 
+def _on_date_is_the_persons_action(rest: str) -> bool:
+    """A leading "On <date>," counts only when the person is the subject of a past action."""
+    if re.match(r"(?:the\s+)?(?:company|board)\b", rest, re.I):
+        return False
+    if re.search(r"\bwill\b", rest, re.I):
+        return False
+    return re.match(
+        rf"(?:{_HONORIFIC})?{_NAME}\s+(?:has\s+)?(?:resign(?:ed|s)?|retir(?:ed|es|ement)?|"
+        rf"stepped\s+down|left|depart(?:ed|s)?|ceased\s+to\s+serve|was\s+removed)\b",
+        rest,
+        re.I,
+    ) is not None
+
+
+def _eff_date(sentence: str) -> tuple[str | None, int | None]:
+    # An effective, starting, or as-of date is the action date. It wins over "On <date>,".
+    action = re.search(
+        r"\b(?:effective|starting|as\s+of)\s+([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?",
+        sentence,
+        re.I,
+    )
+    if action is not None:
+        return _shown_date(action.group(1), action.group(2), action.group(3))
+    on = re.match(
+        r"On\s+([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4}),\s+(.*)",
+        sentence.strip(),
+        re.I,
+    )
+    if on is None or not _on_date_is_the_persons_action(on.group(4)):
+        return None, None
+    return _shown_date(on.group(1), on.group(2), on.group(3))
+
+
+def _leap_year(year: int) -> bool:
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+
 def _impossible_calendar_day(sentence: str) -> bool:
     for match in re.finditer(
-        r"\b(?:effective|starting|on)\s+([A-Za-z]+)\s+(\d{1,2})\b",
+        r"\b(?:effective|starting|as\s+of|on)\s+([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?",
         sentence,
         re.I,
     ):
@@ -765,6 +812,9 @@ def _impossible_calendar_day(sentence: str) -> bool:
             continue
         month = _MONTHS.index(month_name) + 1
         day = int(match.group(2))
+        year = int(match.group(3)) if match.group(3) else None
+        if month == 2 and day == 29 and year is not None and not _leap_year(year):
+            return True
         if month == 2 and day > 29:
             return True
         if month in {4, 6, 9, 11} and day > 30:
@@ -943,6 +993,40 @@ def _impossible_effective(person: dict, filing_iso: str | None) -> bool:
     return _placed_effective(person.get("eff_date"), person.get("eff_year"), filing_iso) == "impossible"
 
 
+def _clear_leadership(fields: dict) -> None:
+    """Drop a leadership decision once its date cannot be placed."""
+    fields["text_outcome"] = "unconfirmable"
+    fields["verified"] = False
+    fields["h3_category"] = None
+    for key in (
+        "person",
+        "role",
+        "lead_direction",
+        "resigned_or_retired",
+        "eff_date",
+        "eff_year",
+        "leaders_json",
+        "verb_timing",
+    ):
+        fields[key] = None
+
+
+def _tense_hides(person: dict, filing_iso: str | None) -> bool:
+    """A "will" more than 7 days early, or a person's past leaving verb after the filing, hides."""
+    timing = person.get("verb_timing")
+    if timing not in {"future", "past_leaving"} or not filing_iso:
+        return False
+    placed = _placed_effective(person.get("eff_date"), person.get("eff_year"), filing_iso)
+    if not isinstance(placed, date):
+        return False
+    filing = datetime.fromisoformat(filing_iso).date()
+    if timing == "future" and placed < filing:
+        return (filing - placed).days > 7
+    if timing == "past_leaving" and placed > filing:
+        return True
+    return False
+
+
 def _eff_on_or_before(eff_date: str | None, eff_year: int | None, filing_iso: str | None) -> bool:
     placed = _placed_effective(eff_date, eff_year, filing_iso)
     if placed is None or placed == "impossible" or not filing_iso:
@@ -981,8 +1065,13 @@ def _leadership_line(name: str, phrase: str, pretty: str, fields: dict, filing_i
     if isinstance(people, list) and people:
         sentences = []
         blocked = False
+        impossible = False
         for person in people[:2]:
             if _impossible_effective(person, filing_iso):
+                blocked = True
+                impossible = True
+                continue
+            if _tense_hides(person, filing_iso):
                 blocked = True
                 continue
             sentence = _one_leader_line(name, person, filing_iso)
@@ -991,8 +1080,13 @@ def _leadership_line(name: str, phrase: str, pretty: str, fields: dict, filing_i
         if sentences:
             return " ".join(sentences)
         if blocked:
+            if impossible:
+                _clear_leadership(fields)
             return None
     elif _impossible_effective(fields, filing_iso):
+        _clear_leadership(fields)
+        return None
+    elif _tense_hides(fields, filing_iso):
         return None
     if fields.get("person") and fields.get("role") and fields.get("lead_direction"):
         sentence = _one_leader_line(name, fields, filing_iso)
@@ -1007,7 +1101,7 @@ def _one_leader_line(name: str, person: dict, filing_iso: str | None = None) -> 
     direction = person.get("lead_direction")
     if not who or not role or direction not in {"joining", "leaving"}:
         return None
-    if _impossible_effective(person, filing_iso):
+    if _impossible_effective(person, filing_iso) or _tense_hides(person, filing_iso):
         return None
     eff = person.get("eff_date")
     past = _eff_on_or_before(eff, person.get("eff_year"), filing_iso)
