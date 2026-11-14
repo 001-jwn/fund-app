@@ -181,7 +181,7 @@ def test_aapl_000024_earnings_line_includes_diluted_eps(monkeypatch):
     assert decision["measure"] == "diluted earnings per share"
     assert decision["figure"] == "$2.10"
     assert _line(decision, name="Apple", accepted_at="2026-11-02T21:30:23.000Z") == (
-        "Apple shared its latest quarterly results in an SEC filing on Nov 2. "
+        "Apple shared its quarterly results in an SEC filing on Nov 2. "
         "The company reported diluted earnings per share of $2.10."
     )
 
@@ -364,7 +364,7 @@ def test_msft_436122_shows_quarterly_results_on_oct_28():
     assert decision["hide_reason"] is None
     assert decision["is_quarter"] is True
     assert _line(decision, name="Microsoft", accepted_at="2026-10-28T20:30:00Z") == (
-        "Microsoft shared its latest quarterly results in an SEC filing on Oct 28."
+        "Microsoft shared its quarterly results in an SEC filing on Oct 28."
     )
 
 
@@ -388,6 +388,28 @@ def test_hidden_real_filings_stay_hidden():
         assert decision["verified"] is False
         assert decision["hide_reason"] is None
         assert _line(decision, name="NVIDIA", accepted_at="2026-11-01T16:00:00Z") is None
+
+
+def test_msft_224155_uses_the_effective_board_date():
+    text = plain_text(_read("msft-0001193125-26-224155.txt"))
+    assert "effective May 13, 2026" in text
+    assert "Carmine Di Sibio" in text
+    decision = decide_filing(
+        ticker="MSFT",
+        form="8-K",
+        items=["5.02", "9.01"],
+        accession="0001193125-26-224155",
+        documents=[_doc(
+            text,
+            url="https://www.sec.gov/Archives/edgar/data/789019/000119312526224155/d125909d8k.htm",
+        )],
+    )
+    assert decision["person"] == "Carmine Di Sibio"
+    assert decision["eff_date"] == "May 13"
+    assert decision["eff_year"] == 2026
+    line = _line(decision, name="Microsoft", accepted_at="2026-05-14T16:28:48Z")
+    assert line == "Microsoft announced that Carmine Di Sibio joined its board of directors on May 13."
+    assert "May 14" not in line
 
 
 def test_aapl_035325_amendment_does_not_guess_an_accession():
