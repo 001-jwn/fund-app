@@ -39,13 +39,36 @@ _ADVICE = re.compile(
 _ACCESSION = re.compile(r"\b\d{10}-\d{2}-\d{6}\b")
 _UP = "A-ZÀ-ÖØ-Þ"
 _LETTERS = "A-Za-zÀ-ÖØ-öø-ÿ"
-_NAME_GAP = r"[ \u00a0]+"
+# A comma is allowed only before a suffix: "John Smith, Jr."
+_NAME_GAP = r"(?:[ \u00a0]*,[ \u00a0]+|[ \u00a0]+)"
 _NAME_WORD = rf"[{_UP}][{_LETTERS}'’\-]*[{_LETTERS}]"
 _NAME_INITIAL = rf"[{_UP}]\."
-_NAME_SUFFIX = r"(?:Jr\.|Sr\.|II|III)"
-_NAME_TOKEN = rf"(?:{_NAME_SUFFIX}|{_NAME_INITIAL}|{_NAME_WORD})"
-_NAME = rf"(?-i:({_NAME_WORD}(?:{_NAME_GAP}{_NAME_TOKEN}){{1,3}}))"
-_SUFFIXES = frozenset({"Jr.", "Sr.", "II", "III"})
+_NAME_SUFFIX = r"(?:Jr\.|Sr\.|II|III|IV)"
+_NAME_PARTICLE = r"(?:de|del|van|la|di)"
+_NAME_TOKEN = rf"(?:{_NAME_SUFFIX}|{_NAME_INITIAL}|{_NAME_PARTICLE}|{_NAME_WORD})"
+_NAME = rf"(?-i:({_NAME_WORD}(?:{_NAME_GAP}{_NAME_TOKEN}){{1,5}}))"
+# Start of the sentence, or after "that"/"announced", so a later piece of a longer name cannot match alone.
+_NAME_BOUND = r"(?:^|\b(?:that|announced)\s+)"
+_SUFFIXES = frozenset({"Jr.", "Sr.", "II", "III", "IV"})
+_PARTICLES = frozenset({"de", "del", "van", "la", "di"})
+_BLOCKED_NAME = frozenset({
+    "holdings",
+    "inc",
+    "corporation",
+    "company",
+    "llc",
+    "group",
+    "interim",
+    "acting",
+    "senior",
+    "executive",
+    "vice",
+    "president",
+    "chief",
+    "officer",
+    "mr",
+    "dr",
+})
 _OFFICER_ROLE = (
     r"chief executive officer|chief financial officer|\bCEO\b|\bCFO\b|"
     r"lead independent director|"
@@ -523,23 +546,23 @@ def _leader_in_sentence(sentence: str, filing_year: int | None) -> dict | None:
         return None
     role = _OFFICER_ROLE
     leaving = (
-        rf"{_NAME}\s+(?:has\s+|will\s+)?resign(?:ed|s)?\s+as\s+(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}\s+will\s+transition\s+from\s+(?:his|her|their)\s+role\s+as\s+(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}{_APPOS}\s+will\s+step\s+down\s+from\s+(?:his|her|their)\s+role(?:\s+as\s+(?:its\s+|the\s+)?({role}))?",
-        rf"{_NAME}\s+will\s+(?:retire|step\s+down|transition|leave)(?:\s+from)?(?:\s+the\s+role\s+of)?\s+as\s+(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}\s+will\s+step\s+down\s+as\s+(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}\s+will\s+transition\s+from\s+(?:the\s+role\s+of\s+)?(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}\s+will\s+leave\s+(?:the\s+role\s+of\s+)?(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}\s+(?:has\s+)?retir(?:ed|e|ement)\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}\s+(?:has\s+|will\s+)?resign(?:ed|s)?\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}\s+will\s+transition\s+from\s+(?:his|her|their)\s+role\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}{_APPOS}\s+will\s+step\s+down\s+from\s+(?:his|her|their)\s+role(?:\s+as\s+(?:its\s+|the\s+)?({role}))?",
+        rf"{_NAME_BOUND}{_NAME}\s+will\s+(?:retire|step\s+down|transition|leave)(?:\s+from)?(?:\s+the\s+role\s+of)?\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}\s+will\s+step\s+down\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}\s+will\s+transition\s+from\s+(?:the\s+role\s+of\s+)?(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}\s+will\s+leave\s+(?:the\s+role\s+of\s+)?(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}\s+(?:has\s+)?retir(?:ed|e|ement)\s+as\s+(?:its\s+|the\s+)?({role})",
     )
     joining = (
         rf"\bappointed\s+{_NAME}{_APPOS}\s+as\s+(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}\s+(?:has been|was|will be)\s+appointed\s+as\s+(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}{_APPOS}\s+will\s+assume\s+the\s+role\s+of\s+(?:its\s+|the\s+)?({role})",
-        rf"{_NAME}{_APPOS}\s+will\s+become\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}\s+(?:has been|was|will be)\s+appointed\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}{_APPOS}\s+will\s+assume\s+the\s+role\s+of\s+(?:its\s+|the\s+)?({role})",
+        rf"{_NAME_BOUND}{_NAME}{_APPOS}\s+will\s+become\s+(?:its\s+|the\s+)?({role})",
     )
-    board_join = rf"\bappointed\s+{_NAME}\s+to\s+(?:its\s+|the\s+)?board of directors|{_NAME}\s+will\s+join\s+(?:its\s+|the\s+)?board of directors"
-    board_leave = rf"{_NAME}\s+will\s+(?:leave|resign from)\s+(?:its\s+|the\s+)?board of directors"
+    board_join = rf"\bappointed\s+{_NAME}\s+to\s+(?:its\s+|the\s+)?board of directors|{_NAME_BOUND}{_NAME}\s+will\s+join\s+(?:its\s+|the\s+)?board of directors"
+    board_leave = rf"{_NAME_BOUND}{_NAME}\s+will\s+(?:leave|resign from)\s+(?:its\s+|the\s+)?board of directors"
     for pattern in leaving:
         found = _matched_leader(pattern, sentence, "leaving")
         if found:
@@ -582,12 +605,12 @@ def _named_executive_officer(sentence: str) -> dict | None:
     gap = r"[\s\S]{0,80}?"
     patterns = (
         (rf"\bappointed\s+{_NAME}\s+as\s+{gap}{_NEO}", "joining"),
-        (rf"\b{_NAME}\s+(?:has been|was|will be)\s+appointed\s+as\s+{gap}{_NEO}", "joining"),
-        (rf"\b{_NAME}\s+will\s+become\s+{gap}{_NEO}", "joining"),
-        (rf"\b{_NAME}\s+(?:has\s+|will\s+)?resign(?:ed|s)?\s+as\s+{gap}{_NEO}", "leaving"),
-        (rf"\b{_NAME}\s+will\s+step\s+down\s+as\s+{gap}{_NEO}", "leaving"),
-        (rf"\b{_NAME}\s+will\s+(?:retire|leave|transition)\s+as\s+{gap}{_NEO}", "leaving"),
-        (rf"\b{_NAME}\s+(?:has\s+)?retired\s+as\s+{gap}{_NEO}", "leaving"),
+        (rf"{_NAME_BOUND}{_NAME}\s+(?:has been|was|will be)\s+appointed\s+as\s+{gap}{_NEO}", "joining"),
+        (rf"{_NAME_BOUND}{_NAME}\s+will\s+become\s+{gap}{_NEO}", "joining"),
+        (rf"{_NAME_BOUND}{_NAME}\s+(?:has\s+|will\s+)?resign(?:ed|s)?\s+as\s+{gap}{_NEO}", "leaving"),
+        (rf"{_NAME_BOUND}{_NAME}\s+will\s+step\s+down\s+as\s+{gap}{_NEO}", "leaving"),
+        (rf"{_NAME_BOUND}{_NAME}\s+will\s+(?:retire|leave|transition)\s+as\s+{gap}{_NEO}", "leaving"),
+        (rf"{_NAME_BOUND}{_NAME}\s+(?:has\s+)?retired\s+as\s+{gap}{_NEO}", "leaving"),
     )
     for pattern, direction in patterns:
         match = re.search(pattern, sentence, re.I)
@@ -610,34 +633,48 @@ def _real_title(sentence: str) -> str | None:
     return None
 
 
+def _name_key(token: str) -> str:
+    return token.lower().rstrip(".,")
+
+
 def _is_name_word(token: str) -> bool:
+    """A word needs lowercase letters. All caps, and a run of capitals, stay hidden."""
     if not token or not token[0].isalpha() or not token[0].isupper():
+        return False
+    if _name_key(token) in _NOT_A_NAME or _name_key(token) in _BLOCKED_NAME:
         return False
     pieces = re.split(r"['’\-]", token)
     if any(not piece or not piece.isalpha() for piece in pieces):
         return False
-    return all(piece[0].isupper() for piece in pieces)
+    for piece in pieces:
+        if not piece[0].isupper():
+            return False
+        if len(piece) > 1 and not any(ch.islower() for ch in piece):
+            return False
+        if any(left.isupper() and right.isupper() for left, right in zip(piece, piece[1:])):
+            return False
+    return True
 
 
 def _valid_person_name(name: str) -> bool:
-    parts = name.split(" ")
-    if not 2 <= len(parts) <= 4 or parts[0].lower() == "the":
+    parts = [part.rstrip(",") for part in name.split(" ") if part.rstrip(",")]
+    if not 2 <= len(parts) <= 6 or _name_key(parts[0]) == "the":
         return False
     core = parts[:-1] if parts[-1] in _SUFFIXES else parts
     if not core or any(part in _SUFFIXES for part in core):
         return False
     words = 0
     for part in core:
-        lowered = part.lower().rstrip(".")
-        if lowered in _NOT_A_NAME or "n't" in lowered:
+        key = _name_key(part)
+        if key in _NOT_A_NAME or key in _BLOCKED_NAME or "n't" in key:
             return False
+        if key in _PARTICLES:
+            continue
         if re.fullmatch(r"[A-ZÀ-ÖØ-Þ]\.", part):
             continue
         if not _is_name_word(part):
             return False
         words += 1
-    if parts[-1] in _SUFFIXES:
-        return words >= 2
     return words >= 2
 
 
@@ -818,17 +855,34 @@ def _period_label(sentences: list[str], direction: str) -> str | None:
     return None
 
 
+def _calendar_date(year: int, month: int, day: int):
+    try:
+        return datetime(year, month, day).date()
+    except ValueError:
+        return None
+
+
 def _eff_on_or_before(eff_date: str | None, eff_year: int | None, filing_iso: str | None) -> bool:
     if not eff_date or not filing_iso:
         return False
     parts = eff_date.split(" ")
     if len(parts) != 2 or parts[0] not in _MONTHS:
         return False
-    try:
-        filing = datetime.fromisoformat(filing_iso).date()
-        effective = filing.replace(year=eff_year or filing.year, month=_MONTHS.index(parts[0]) + 1, day=int(parts[1]))
-    except ValueError:
+    filing = datetime.fromisoformat(filing_iso).date()
+    month = _MONTHS.index(parts[0]) + 1
+    day = int(parts[1])
+    if eff_year is not None:
+        effective = _calendar_date(eff_year, month, day)
+        return effective is not None and effective <= filing
+    # No year in the filing: use whichever nearby year lands closest to the New York filing date.
+    candidates = []
+    for year in (filing.year - 1, filing.year, filing.year + 1):
+        candidate = _calendar_date(year, month, day)
+        if candidate is not None:
+            candidates.append(candidate)
+    if not candidates:
         return False
+    effective = min(candidates, key=lambda candidate: (abs((candidate - filing).days), candidate))
     return effective <= filing
 
 

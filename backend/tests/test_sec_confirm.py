@@ -287,6 +287,115 @@ def test_card_line_keeps_accented_and_curly_names():
     )
 
 
+def _named(sentence: str, accepted: str = "2026-11-06T02:00:00Z"):
+    decision = _person(sentence)
+    return decision, _line(decision) if accepted == "2026-11-06T02:00:00Z" else build_summary(
+        category=decision.get("h3_category"),
+        form="8-K",
+        accepted_at=accepted,
+        name="NVIDIA",
+        fields=decision,
+    )
+
+
+def test_all_caps_names_stay_hidden_and_mixed_case_names_show():
+    for sentence in (
+        "JOHN SMITH resigned as chief financial officer.",
+        "McDONALD SMITH resigned as chief financial officer.",
+    ):
+        decision, line = _named(sentence)
+        assert decision["h3_category"] is None
+        assert decision["person"] is None
+        assert line is None
+    shown = {
+        "Ronald McDonald resigned as chief financial officer.": "Ronald McDonald",
+        "Sean O'Brien resigned as chief financial officer.": "Sean O'Brien",
+        "Sean O\u2019Brien resigned as chief financial officer.": "Sean O\u2019Brien",
+        "Mary Smith-Jones resigned as chief financial officer.": "Mary Smith-Jones",
+        "Jane Q. Doe resigned as chief financial officer.": "Jane Q. Doe",
+        "The Company appointed Jos\u00e9 N\u00fa\u00f1ez as chief executive officer.": "Jos\u00e9 N\u00fa\u00f1ez",
+        "Jean-Luc Picard resigned as chief executive officer.": "Jean-Luc Picard",
+        "John Smith Jr. resigned as chief financial officer.": "John Smith Jr.",
+        "John Smith III resigned as chief financial officer.": "John Smith III",
+        "Carmine Di Sibio resigned as chief financial officer.": "Carmine Di Sibio",
+        "Tony D\u2019Angelo resigned as chief financial officer.": "Tony D\u2019Angelo",
+    }
+    for sentence, person in shown.items():
+        decision, line = _named(sentence)
+        assert decision["person"] == person
+        assert person in line
+
+
+def test_effective_date_without_a_year_uses_the_nearest_year():
+    future = _person(
+        "The Company appointed Ada Lovelace as chief financial officer effective January 5."
+    )
+    future_line = build_summary(
+        category=future.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-12-30T21:00:00Z",
+        name="NVIDIA",
+        fields=future,
+    )
+    assert future_line == (
+        "NVIDIA announced that Ada Lovelace will become its chief financial officer, starting Jan 5."
+    )
+
+    past = _person("Jane Doe resigned as chief executive officer effective December 31.")
+    past_line = build_summary(
+        category=past.get("h3_category"),
+        form="8-K",
+        accepted_at="2027-01-03T21:00:00Z",
+        name="NVIDIA",
+        fields=past,
+    )
+    assert past_line == (
+        "NVIDIA announced that Jane Doe stepped down from the role of chief executive officer on Dec 31."
+    )
+
+    leap = _person("The Company appointed Ada Lovelace as chief financial officer effective February 29.")
+    leap_line = build_summary(
+        category=leap.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-06-15T16:00:00Z",
+        name="NVIDIA",
+        fields=leap,
+    )
+    assert leap_line == (
+        "NVIDIA announced that Ada Lovelace will become its chief financial officer, starting Feb 29."
+    )
+
+
+def test_leaving_name_is_not_truncated_and_titles_are_hidden():
+    full, line = _named("Anna Maria Louisa Theresa Smith resigned as chief financial officer.")
+    assert full["person"] == "Anna Maria Louisa Theresa Smith"
+    assert line.startswith("NVIDIA announced that Anna Maria Louisa Theresa Smith,")
+
+    maria, line = _named("Maria de Souza Santos resigned as chief financial officer.")
+    assert maria["person"] == "Maria de Souza Santos"
+    assert line.startswith("NVIDIA announced that Maria de Souza Santos,")
+
+    juan, line = _named("Juan Carlos de la Cruz resigned as chief financial officer.")
+    assert juan["person"] == "Juan Carlos de la Cruz"
+    ludwig, line = _named("Ludwig van Beethoven resigned as chief financial officer.")
+    assert ludwig["person"] == "Ludwig van Beethoven"
+
+    for sentence in (
+        "Acme Holdings resigned as chief financial officer.",
+        "Interim Jane Doe resigned as chief financial officer.",
+        "J. P. Smith resigned as chief financial officer.",
+    ):
+        decision, line = _named(sentence)
+        assert decision["person"] is None
+        assert line is None
+
+
+def test_comma_before_a_suffix_is_kept():
+    decision = _person("The Company appointed John Smith, Jr. as chief financial officer.")
+    assert decision["person"] == "John Smith, Jr."
+    assert _line(decision) == "NVIDIA announced that John Smith, Jr. will become its chief financial officer."
+
+
 def test_unsure_person_names_stay_hidden():
     for sentence in (
         "The Company appointed jane doe as chief executive officer.",
