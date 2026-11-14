@@ -365,6 +365,40 @@ def test_effective_date_without_a_year_uses_the_nearest_year():
         "NVIDIA announced that Ada Lovelace will become its chief financial officer, starting Feb 29."
     )
 
+    december = _person("The Company appointed Ada Lovelace as chief financial officer effective December 31.")
+    december_line = build_summary(
+        category=december.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-06-30T16:00:00Z",
+        name="NVIDIA",
+        fields=december,
+    )
+    assert december_line == (
+        "NVIDIA announced that Ada Lovelace will become its chief financial officer, starting Dec 31."
+    )
+
+    january = _person("The Company appointed Ada Lovelace as chief financial officer effective January 15.")
+    january_line = build_summary(
+        category=january.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-06-30T16:00:00Z",
+        name="NVIDIA",
+        fields=january,
+    )
+    assert january_line == "NVIDIA announced that Ada Lovelace became its chief financial officer on Jan 15."
+
+    new_year = _person("The Company appointed Ada Lovelace as chief financial officer effective January 10.")
+    new_year_line = build_summary(
+        category=new_year.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-15T16:00:00Z",
+        name="NVIDIA",
+        fields=new_year,
+    )
+    assert new_year_line == (
+        "NVIDIA announced that Ada Lovelace will become its chief financial officer, starting Jan 10."
+    )
+
 
 def test_leaving_name_is_not_truncated_and_titles_are_hidden():
     full, line = _named("Anna Maria Louisa Theresa Smith resigned as chief financial officer.")
@@ -394,6 +428,97 @@ def test_comma_before_a_suffix_is_kept():
     decision = _person("The Company appointed John Smith, Jr. as chief financial officer.")
     assert decision["person"] == "John Smith, Jr."
     assert _line(decision) == "NVIDIA announced that John Smith, Jr. will become its chief financial officer."
+
+    resigned = _person("John Smith, Jr. resigned as chief financial officer.")
+    assert resigned["person"] == "John Smith, Jr."
+    assert _line(resigned) == (
+        "NVIDIA announced that John Smith, Jr., its chief financial officer, will step down."
+    )
+
+
+def test_a_comma_is_not_a_name_separator():
+    for sentence in (
+        "Separately, Jane Doe resigned as chief financial officer.",
+        "Additionally, Jane Doe resigned as chief financial officer.",
+        "Also, Jane Doe resigned as chief financial officer.",
+        "Doe, Jane resigned as chief financial officer.",
+        "Smith, Jane Doe resigned as chief financial officer.",
+    ):
+        decision, line = _named(sentence)
+        assert decision["person"] is None
+        assert line is None
+        assert "Separately" not in (line or "")
+        assert "Additionally" not in (line or "")
+        assert "Doe, Jane" not in (line or "")
+
+
+def test_sentence_adverbs_are_not_part_of_a_name():
+    for sentence in (
+        "Today Jane Doe resigned as chief financial officer.",
+        "Yesterday Jane Doe resigned as chief financial officer.",
+    ):
+        decision, line = _named(sentence)
+        text = line or ""
+        assert "Today" not in text
+        assert "Yesterday" not in text
+        if decision["person"] is not None:
+            assert decision["person"] == "Jane Doe"
+        else:
+            assert line is None
+
+
+def test_leading_date_clause_is_not_part_of_the_name():
+    dated = _person("On May 1, 2026, Jane Doe resigned as chief financial officer.")
+    assert dated["person"] == "Jane Doe"
+    assert dated["eff_date"] == "May 1"
+    assert dated["eff_year"] == 2026
+    line = _line(dated)
+    assert line == (
+        "NVIDIA announced that Jane Doe stepped down from the role of chief financial officer on May 1."
+    )
+    assert "On May" not in line
+
+    lead = _person("Effective May 1, Jane Doe will step down as chief financial officer.")
+    assert lead["person"] == "Jane Doe"
+    assert lead["eff_date"] == "May 1"
+    line = _line(lead)
+    assert "Effective" not in line
+    assert line == (
+        "NVIDIA announced that Jane Doe, its chief financial officer, will leave that role, starting May 1."
+    )
+
+
+def test_honorifics_are_not_part_of_the_name():
+    for sentence, person in (
+        ("Mr. John Smith resigned as chief financial officer.", "John Smith"),
+        ("Ms. Jane Doe resigned as chief financial officer.", "Jane Doe"),
+        ("Dr. Jane Doe resigned as chief financial officer.", "Jane Doe"),
+    ):
+        decision, line = _named(sentence)
+        assert decision["person"] == person
+        assert person in line
+        assert "Mr." not in line
+        assert "Ms." not in line
+        assert "Dr." not in line
+    for sentence in (
+        "Ms. Doe resigned as chief financial officer.",
+        "Mr. Smith resigned as chief financial officer.",
+    ):
+        decision, line = _named(sentence)
+        assert decision["person"] is None
+        assert line is None
+
+
+def test_trailing_particle_and_impossible_date_stay_hidden():
+    particle, line = _named("Jane Doe de resigned as chief financial officer.")
+    assert particle["person"] is None
+    assert line is None
+
+    bad = _person("Jane Doe resigned as chief financial officer effective February 30.")
+    line = _line(bad)
+    assert bad["person"] is None
+    assert line is None
+    assert "Feb 30" not in (line or "")
 
 
 def test_unsure_person_names_stay_hidden():

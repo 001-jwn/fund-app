@@ -39,16 +39,24 @@ _ADVICE = re.compile(
 _ACCESSION = re.compile(r"\b\d{10}-\d{2}-\d{6}\b")
 _UP = "A-ZÀ-ÖØ-Þ"
 _LETTERS = "A-Za-zÀ-ÖØ-öø-ÿ"
-# A comma is allowed only before a suffix: "John Smith, Jr."
-_NAME_GAP = r"(?:[ \u00a0]*,[ \u00a0]+|[ \u00a0]+)"
+# A comma is allowed only directly before a suffix: "John Smith, Jr."
+_WORD_GAP = r"[ \u00a0]+"
+_SUFFIX_GAP = r"(?:[ \u00a0]*,[ \u00a0]+|[ \u00a0]+)"
 _NAME_WORD = rf"[{_UP}][{_LETTERS}'’\-]*[{_LETTERS}]"
 _NAME_INITIAL = rf"[{_UP}]\."
 _NAME_SUFFIX = r"(?:Jr\.|Sr\.|II|III|IV)"
 _NAME_PARTICLE = r"(?:de|del|van|la|di)"
-_NAME_TOKEN = rf"(?:{_NAME_SUFFIX}|{_NAME_INITIAL}|{_NAME_PARTICLE}|{_NAME_WORD})"
-_NAME = rf"(?-i:({_NAME_WORD}(?:{_NAME_GAP}{_NAME_TOKEN}){{1,5}}))"
-# Start of the sentence, or after "that"/"announced", so a later piece of a longer name cannot match alone.
-_NAME_BOUND = r"(?:^|\b(?:that|announced)\s+)"
+_NAME_INNER = rf"(?:{_NAME_PARTICLE}|{_NAME_INITIAL}|{_NAME_WORD})"
+_NAME = rf"(?-i:({_NAME_WORD}(?:{_WORD_GAP}{_NAME_INNER}){{0,5}}(?:{_SUFFIX_GAP}{_NAME_SUFFIX})?))"
+_DATE_LEAD = (
+    r"(?:On\s+[A-Za-z]+\s+\d{1,2},\s+\d{4},\s+"
+    r"|(?:[Ee]ffective|[Ss]tarting)\s+[A-Za-z]+\s+\d{1,2},\s+)"
+)
+_HONORIFIC = r"(?:Mr|Ms|Mrs|Dr)\.\s+"
+# The name starts after a date clause or an honorific, or at the sentence / "that".
+_NAME_BOUND = (
+    rf"(?:{_DATE_LEAD}(?:{_HONORIFIC})?|{_HONORIFIC}|^|\b(?:that|announced)\s+(?:{_HONORIFIC})?)"
+)
 _SUFFIXES = frozenset({"Jr.", "Sr.", "II", "III", "IV"})
 _PARTICLES = frozenset({"de", "del", "van", "la", "di"})
 _BLOCKED_NAME = frozenset({
@@ -124,6 +132,15 @@ _NOT_A_NAME = frozenset({
     "chairperson",
     "company",
     "current",
+    "today",
+    "yesterday",
+    "separately",
+    "additionally",
+    "also",
+    "further",
+    "furthermore",
+    "accordingly",
+    "effective",
 })
 _BAD_DEAL = re.compile(
     r"\b(?:credit agreement|guarant(?:y|ee)|lease agreement|partnership agreement|"
@@ -556,12 +573,15 @@ def _leader_in_sentence(sentence: str, filing_year: int | None) -> dict | None:
         rf"{_NAME_BOUND}{_NAME}\s+(?:has\s+)?retir(?:ed|e|ement)\s+as\s+(?:its\s+|the\s+)?({role})",
     )
     joining = (
-        rf"\bappointed\s+{_NAME}{_APPOS}\s+as\s+(?:its\s+|the\s+)?({role})",
+        rf"\bappointed\s+(?:{_HONORIFIC})?{_NAME}{_APPOS}\s+as\s+(?:its\s+|the\s+)?({role})",
         rf"{_NAME_BOUND}{_NAME}\s+(?:has been|was|will be)\s+appointed\s+as\s+(?:its\s+|the\s+)?({role})",
         rf"{_NAME_BOUND}{_NAME}{_APPOS}\s+will\s+assume\s+the\s+role\s+of\s+(?:its\s+|the\s+)?({role})",
         rf"{_NAME_BOUND}{_NAME}{_APPOS}\s+will\s+become\s+(?:its\s+|the\s+)?({role})",
     )
-    board_join = rf"\bappointed\s+{_NAME}\s+to\s+(?:its\s+|the\s+)?board of directors|{_NAME_BOUND}{_NAME}\s+will\s+join\s+(?:its\s+|the\s+)?board of directors"
+    board_join = (
+        rf"\bappointed\s+(?:{_HONORIFIC})?{_NAME}\s+to\s+(?:its\s+|the\s+)?board of directors"
+        rf"|{_NAME_BOUND}{_NAME}\s+will\s+join\s+(?:its\s+|the\s+)?board of directors"
+    )
     board_leave = rf"{_NAME_BOUND}{_NAME}\s+will\s+(?:leave|resign from)\s+(?:its\s+|the\s+)?board of directors"
     for pattern in leaving:
         found = _matched_leader(pattern, sentence, "leaving")
@@ -669,6 +689,8 @@ def _valid_person_name(name: str) -> bool:
         if key in _NOT_A_NAME or key in _BLOCKED_NAME or "n't" in key:
             return False
         if key in _PARTICLES:
+            if part == core[-1]:
+                return False
             continue
         if re.fullmatch(r"[A-ZÀ-ÖØ-Þ]\.", part):
             continue
@@ -688,6 +710,8 @@ def _leader_fields(person: str, role: str | None, direction: str, sentence: str)
     stored = _role_case(role) if role else None
     if stored == "named executive officer":
         stored = None
+    if _impossible_calendar_day(sentence):
+        return None
     resigned = bool(re.search(r"\b(?:resign|resigned|retire|retired|retirement)\b", sentence, re.I))
     shown, year = _eff_date(sentence)
     return {
@@ -712,17 +736,42 @@ def _role_case(role: str) -> str:
 
 def _eff_date(sentence: str) -> tuple[str | None, int | None]:
     match = re.search(
-        r"\b(?:effective|starting)\s+([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?",
+        r"\b(?:effective|starting)\s+([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?"
+        r"|\bOn\s+([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})",
         sentence,
         re.I,
     )
     if match is None:
         return None, None
-    month = _FULL_MONTHS.get(match.group(1).lower())
+    if match.group(1):
+        month_word, day_text, year_text = match.group(1), match.group(2), match.group(3)
+    else:
+        month_word, day_text, year_text = match.group(4), match.group(5), match.group(6)
+    month = _FULL_MONTHS.get(month_word.lower())
     if month is None:
         return None, None
-    year = int(match.group(3)) if match.group(3) else None
-    return f"{month} {int(match.group(2))}", year
+    year = int(year_text) if year_text else None
+    return f"{month} {int(day_text)}", year
+
+
+def _impossible_calendar_day(sentence: str) -> bool:
+    for match in re.finditer(
+        r"\b(?:effective|starting|on)\s+([A-Za-z]+)\s+(\d{1,2})\b",
+        sentence,
+        re.I,
+    ):
+        month_name = _FULL_MONTHS.get(match.group(1).lower())
+        if month_name is None:
+            continue
+        month = _MONTHS.index(month_name) + 1
+        day = int(match.group(2))
+        if month == 2 and day > 29:
+            return True
+        if month in {4, 6, 9, 11} and day > 30:
+            return True
+        if day < 1 or day > 31:
+            return True
+    return False
 
 
 def _guidance_sentence(sentence: str) -> bool:
@@ -874,12 +923,12 @@ def _eff_on_or_before(eff_date: str | None, eff_year: int | None, filing_iso: st
     if eff_year is not None:
         effective = _calendar_date(eff_year, month, day)
         return effective is not None and effective <= filing
-    # No year in the filing: use whichever nearby year lands closest to the New York filing date.
-    candidates = []
-    for year in (filing.year - 1, filing.year, filing.year + 1):
-        candidate = _calendar_date(year, month, day)
-        if candidate is not None:
-            candidates.append(candidate)
+    # Stay in the filing year, unless the filing is within 60 days of New Year.
+    new_year = filing.replace(month=1, day=1)
+    next_new_year = new_year.replace(year=filing.year + 1)
+    near_new_year = (filing - new_year).days <= 60 or (next_new_year - filing).days <= 60
+    years = (filing.year - 1, filing.year, filing.year + 1) if near_new_year else (filing.year,)
+    candidates = [candidate for year in years if (candidate := _calendar_date(year, month, day)) is not None]
     if not candidates:
         return False
     effective = min(candidates, key=lambda candidate: (abs((candidate - filing).days), candidate))
