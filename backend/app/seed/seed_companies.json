@@ -124,8 +124,8 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $1.53 billion, a bit above the year-ago quarter. The company was still preparing for the launch of Grand Theft Auto VI.",
-      "last_quarter_date": "2026-06-30",
+      "quarterly_summary": "Revenue was $1.50 billion, down from $1.77 billion a year ago. The company said Grand Theft Auto VI is set to launch on November 19, 2026.",
+      "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
       "interest_tags": [
@@ -143,7 +143,7 @@
         }
       ],
       "content_sources": [
-        "https://www.sec.gov/Archives/edgar/data/946581/000162828026054580/ttwo1q27earningsrelease.htm"
+        "https://www.sec.gov/Archives/edgar/data/946581/000162828026072175/ttwo2q27earningsrelease.htm"
       ]
     },
     {
@@ -326,8 +326,8 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $3.61 billion, up 17% from a year ago. Guests booked about 148 million nights and experience spots combined, up 10%.",
-      "last_quarter_date": "2026-06-30",
+      "quarterly_summary": "Revenue was $4.9 billion, up 19% from a year ago. Guests booked about 155 million nights and experience spots combined, up 16%.",
+      "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
       "interest_tags": [
@@ -345,8 +345,7 @@
         }
       ],
       "content_sources": [
-        "https://news.airbnb.com/airbnb-q2-2026-financial-results",
-        "https://www.sec.gov/Archives/edgar/data/1559720/000119312526337928/d70413dex991.htm"
+        "https://www.sec.gov/Archives/edgar/data/1559720/000119312526449727/d437988dex991.htm"
       ]
     },
     {
@@ -558,8 +557,8 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $7.7 billion, up 9% from a year ago. About 49 million fans attended its shows, up 10%.",
-      "last_quarter_date": "2026-06-30",
+      "quarterly_summary": "Revenue was $10.1 billion, up 19% from a year ago. About 61 million fans attended its shows, up 19%.",
+      "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
       "interest_tags": [
@@ -577,7 +576,7 @@
         }
       ],
       "content_sources": [
-        "https://news.livenationentertainment.com/news/live-nation-entertainment-reports-second-quarter-2026-results"
+        "https://www.sec.gov/Archives/edgar/data/1335258/000133525826000052/lyv-2026q3xex991er.htm"
       ]
     },
     {
