@@ -24,9 +24,9 @@ All placeholders come from the cached filing record or from the verified filing 
 Every line is 1 or 2 sentences.
 
 ### earnings (h3_category = earnings)
-1. Default: `{name} shared its latest results in {filing_phrase} on {date}.`
-   - Say "latest quarterly results" only when the filing says the period is a quarter. Otherwise use "latest results", which also fits a full-year report.
-2. With a figure from the press release: `{name} shared its latest results in {filing_phrase} on {date}. The company reported {measure} of {figure}.`
+1. Default: `{name} shared its results in {filing_phrase} on {date}.`
+   - Say "quarterly results" only when the filing says the period is a quarter. Otherwise use "results", which also fits a full-year report. Never say "latest", because the line can sit on an older card.
+2. With a figure from the press release: `{name} shared its results in {filing_phrase} on {date}. The company reported {measure} of {figure}.`
    - Use line 2 only if the figure and what it measures (revenue, net income, earnings per share and so on) both appear in the exhibit and K2 stores the exhibit link. One figure only. If the measure is not stated, or the exhibit and the filing disagree, use line 1.
 
 ### major deal (h3_category = acquisition_sale)
@@ -46,8 +46,14 @@ Every line is 1 or 2 sentences.
 12. Board member leaving: `{name} announced that {person} will leave its board of directors{eff_clause}.`
 13. Fallback when the details are unclear: `{name} announced a leadership change in {filing_phrase} on {date}.`
    - `{eff_clause}` is `, starting {eff_date}` when the filing states a start date, and an empty string otherwise.
+   - Past tense when {eff_date} is on or before the filing's New York date. Use these instead of 9 to 12 (no {eff_clause}):
+     - 9p: `{name} announced that {person} became its {role} on {eff_date}.`
+     - 10p: `{name} announced that {person} left the role of {role} on {eff_date}.` ("stepped down from the role of" only when the filing says resigned or retired.)
+     - 11p: `{name} announced that {person} joined its board of directors on {eff_date}.`
+     - 12p: `{name} announced that {person} left its board of directors on {eff_date}.`
+   - With no {eff_date}, or one after the filing date, use 9 to 12 as written ("will").
    - If one filing covers two people, use two sentences (one per person), never more.
-   - The line says "announced", not "has left" or "has joined", so it is correct whenever the user reads it.
+   - The line always starts with "announced", so it stays correct whenever the user reads it.
 
 ### guidance (h3_category = guidance)
 "Guidance" means the company's own estimate of what it expects. The app calls it the company's outlook.
@@ -76,7 +82,7 @@ Every line is 1 or 2 sentences.
 - If a required placeholder is missing, use the fallback line in that group. If there is no fallback, show nothing.
 
 ## Shape examples (placeholders, not real data)
-- `Airbnb shared its latest results in an SEC filing on {date}.`
+- `Airbnb shared its quarterly results in an SEC filing on {date}.`
 - `Uber announced that {person}, its chief financial officer, will leave that role, starting {eff_date}.`
 - `Nvidia raised its outlook for {period_label}, according to an SEC filing on {date}.`
 - `Take-Two agreed to acquire {counterparty}, according to an SEC filing on {date}.`
