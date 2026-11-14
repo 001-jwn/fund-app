@@ -37,7 +37,15 @@ _ADVICE = re.compile(
     re.I,
 )
 _ACCESSION = re.compile(r"\b\d{10}-\d{2}-\d{6}\b")
-_NAME = r"(?-i:([A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,3}))"
+_UP = "A-ZÀ-ÖØ-Þ"
+_LETTERS = "A-Za-zÀ-ÖØ-öø-ÿ"
+_NAME_GAP = r"[ \u00a0]+"
+_NAME_WORD = rf"[{_UP}][{_LETTERS}'’\-]*[{_LETTERS}]"
+_NAME_INITIAL = rf"[{_UP}]\."
+_NAME_SUFFIX = r"(?:Jr\.|Sr\.|II|III)"
+_NAME_TOKEN = rf"(?:{_NAME_SUFFIX}|{_NAME_INITIAL}|{_NAME_WORD})"
+_NAME = rf"(?-i:({_NAME_WORD}(?:{_NAME_GAP}{_NAME_TOKEN}){{1,3}}))"
+_SUFFIXES = frozenset({"Jr.", "Sr.", "II", "III"})
 _OFFICER_ROLE = (
     r"chief executive officer|chief financial officer|\bCEO\b|\bCFO\b|"
     r"lead independent director|"
@@ -190,7 +198,7 @@ def build_summary(*, category: str | None, form: str, accepted_at: str | None, n
     elif category == "acquisition_sale":
         line = _deal_line(name, phrase, pretty, fields)
     elif category == "leadership":
-        line = _leadership_line(name, phrase, pretty, fields)
+        line = _leadership_line(name, phrase, pretty, fields, _date_ny)
     elif category == "guidance":
         line = _guidance_line(name, phrase, pretty, fields)
     else:
@@ -247,10 +255,15 @@ def _combined(docs: list[dict]) -> str:
 
 
 def _sentences(text: str) -> list[str]:
-    parts = re.split(r"(?<=[.!?])\s+", text or "")
+    protected = re.sub(
+        r"\b(?:[A-ZÀ-ÖØ-Þ]|Jr|Sr|Mr|Ms|Dr)\.",
+        lambda match: match.group(0).replace(".", "\0"),
+        text or "",
+    )
+    parts = re.split(r"(?<=[.!?])\s+", protected)
     kept = []
     for part in parts:
-        sentence = part.strip()
+        sentence = part.replace("\0", ".").strip()
         if not sentence or _BOILER.search(sentence):
             continue
         kept.append(sentence)
@@ -597,22 +610,40 @@ def _real_title(sentence: str) -> str | None:
     return None
 
 
+def _is_name_word(token: str) -> bool:
+    if not token or not token[0].isalpha() or not token[0].isupper():
+        return False
+    pieces = re.split(r"['’\-]", token)
+    if any(not piece or not piece.isalpha() for piece in pieces):
+        return False
+    return all(piece[0].isupper() for piece in pieces)
+
+
 def _valid_person_name(name: str) -> bool:
     parts = name.split(" ")
     if not 2 <= len(parts) <= 4 or parts[0].lower() == "the":
         return False
-    patterns = (r"[A-Z][a-z]+",) + (r"[A-Z][a-z'\-]+",) * (len(parts) - 1)
-    for part, pattern in zip(parts, patterns):
-        lowered = part.lower()
+    core = parts[:-1] if parts[-1] in _SUFFIXES else parts
+    if not core or any(part in _SUFFIXES for part in core):
+        return False
+    words = 0
+    for part in core:
+        lowered = part.lower().rstrip(".")
         if lowered in _NOT_A_NAME or "n't" in lowered:
             return False
-        if not re.fullmatch(pattern, part):
+        if re.fullmatch(r"[A-ZÀ-ÖØ-Þ]\.", part):
+            continue
+        if not _is_name_word(part):
             return False
-    return True
+        words += 1
+    if parts[-1] in _SUFFIXES:
+        return words >= 2
+    return words >= 2
 
 
 def _leader_fields(person: str, role: str | None, direction: str, sentence: str) -> dict | None:
-    cleaned = re.sub(r"\s+", " ", person).strip()
+    cleaned = person.replace("\u00a0", " ")
+    cleaned = re.sub(r" +", " ", cleaned).strip()
     if not _valid_person_name(cleaned):
         return None
     if role and _role_case(role) == "named executive officer":
@@ -621,12 +652,14 @@ def _leader_fields(person: str, role: str | None, direction: str, sentence: str)
     if stored == "named executive officer":
         stored = None
     resigned = bool(re.search(r"\b(?:resign|resigned|retire|retired|retirement)\b", sentence, re.I))
+    shown, year = _eff_date(sentence)
     return {
         "person": cleaned,
         "role": stored,
         "lead_direction": direction,
         "resigned_or_retired": resigned,
-        "eff_date": _eff_date(sentence),
+        "eff_date": shown,
+        "eff_year": year,
     }
 
 
@@ -640,18 +673,19 @@ def _role_case(role: str) -> str:
     return " ".join(words)
 
 
-def _eff_date(sentence: str) -> str | None:
+def _eff_date(sentence: str) -> tuple[str | None, int | None]:
     match = re.search(
-        r"\b(?:effective|starting)\s+([A-Za-z]+)\s+(\d{1,2})(?:,\s*\d{4})?",
+        r"\b(?:effective|starting)\s+([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?",
         sentence,
         re.I,
     )
     if match is None:
-        return None
+        return None, None
     month = _FULL_MONTHS.get(match.group(1).lower())
     if month is None:
-        return None
-    return f"{month} {int(match.group(2))}"
+        return None, None
+    year = int(match.group(3)) if match.group(3) else None
+    return f"{month} {int(match.group(2))}", year
 
 
 def _guidance_sentence(sentence: str) -> bool:
@@ -784,8 +818,22 @@ def _period_label(sentences: list[str], direction: str) -> str | None:
     return None
 
 
+def _eff_on_or_before(eff_date: str | None, eff_year: int | None, filing_iso: str | None) -> bool:
+    if not eff_date or not filing_iso:
+        return False
+    parts = eff_date.split(" ")
+    if len(parts) != 2 or parts[0] not in _MONTHS:
+        return False
+    try:
+        filing = datetime.fromisoformat(filing_iso).date()
+        effective = filing.replace(year=eff_year or filing.year, month=_MONTHS.index(parts[0]) + 1, day=int(parts[1]))
+    except ValueError:
+        return False
+    return effective <= filing
+
+
 def _earnings_line(name: str, phrase: str, pretty: str, fields: dict) -> str:
-    kind = "latest quarterly results" if fields.get("is_quarter") else "latest results"
+    kind = "quarterly results" if fields.get("is_quarter") else "results"
     line = f"{name} shared its {kind} in {phrase} on {pretty}."
     if fields.get("measure") and fields.get("figure") and fields.get("exhibit_url"):
         line += f" The company reported {fields['measure']} of {fields['figure']}."
@@ -810,27 +858,38 @@ def _deal_line(name: str, phrase: str, pretty: str, fields: dict) -> str:
     return f"{name} reported a major deal in {phrase} on {pretty}. The filing has the details."
 
 
-def _leadership_line(name: str, phrase: str, pretty: str, fields: dict) -> str:
+def _leadership_line(name: str, phrase: str, pretty: str, fields: dict, filing_iso: str | None = None) -> str:
     people = fields.get("leaders_json")
     if isinstance(people, list):
-        sentences = [_one_leader_line(name, person) for person in people[:2]]
+        sentences = [_one_leader_line(name, person, filing_iso) for person in people[:2]]
         sentences = [sentence for sentence in sentences if sentence]
         if sentences:
             return " ".join(sentences)
     if fields.get("person") and fields.get("role") and fields.get("lead_direction"):
-        sentence = _one_leader_line(name, fields)
+        sentence = _one_leader_line(name, fields, filing_iso)
         if sentence:
             return sentence
     return f"{name} announced a leadership change in {phrase} on {pretty}."
 
 
-def _one_leader_line(name: str, person: dict) -> str | None:
+def _one_leader_line(name: str, person: dict, filing_iso: str | None = None) -> str | None:
     who = person.get("person")
     role = person.get("role")
     direction = person.get("lead_direction")
     if not who or not role or direction not in {"joining", "leaving"}:
         return None
     eff = person.get("eff_date")
+    past = _eff_on_or_before(eff, person.get("eff_year"), filing_iso)
+    if past and eff:
+        if "board of directors" in role:
+            if direction == "joining":
+                return f"{name} announced that {who} joined its board of directors on {eff}."
+            return f"{name} announced that {who} left its board of directors on {eff}."
+        if direction == "joining":
+            return f"{name} announced that {who} became its {role} on {eff}."
+        if person.get("resigned_or_retired"):
+            return f"{name} announced that {who} stepped down from the role of {role} on {eff}."
+        return f"{name} announced that {who} left the role of {role} on {eff}."
     clause = f", starting {eff}" if eff else ""
     if "board of directors" in role:
         if direction == "joining":

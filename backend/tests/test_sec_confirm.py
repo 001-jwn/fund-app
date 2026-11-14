@@ -114,7 +114,7 @@ def test_earnings_exhibit_confirms_quarter_and_one_figure():
     assert decision["figure"] == "$2.10"
     line = _line(decision)
     assert line == (
-        "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5. "
+        "NVIDIA shared its quarterly results in an SEC filing on Nov 5. "
         "The company reported diluted earnings per share of $2.10."
     )
 
@@ -205,7 +205,7 @@ def test_named_officer_change_step_down_is_not_resigned():
     assert stepped["lead_direction"] == "leaving"
     assert stepped["resigned_or_retired"] is False
     assert stepped["eff_date"] == "Sep 1"
-    assert "will leave that role, starting Sep 1." in _line(stepped)
+    assert _line(stepped) == "NVIDIA announced that Jane Doe left the role of chief executive officer on Sep 1."
     assert "step down" not in _line(stepped)
 
     moved = _decide(
@@ -225,6 +225,103 @@ def test_named_officer_change_step_down_is_not_resigned():
     assert joined["resigned_or_retired"] is False
     assert joined["eff_date"] is None
     assert _line(joined) == "NVIDIA announced that Ada Lovelace will become its chief financial officer."
+
+
+def _person(sentence: str) -> dict:
+    return _decide(["5.02"], [_doc(sentence)])
+
+
+def test_person_name_straight_apostrophe():
+    decision = _person("The Company appointed Sean O'Brien as chief financial officer.")
+    assert decision["person"] == "Sean O'Brien"
+    assert "Sean O'Brien" in _line(decision)
+
+
+def test_person_name_curly_apostrophe():
+    decision = _person("The Company appointed Sean O\u2019Brien as chief financial officer.")
+    assert decision["person"] == "Sean O\u2019Brien"
+    assert "Sean O\u2019Brien" in _line(decision)
+
+
+def test_person_name_hyphen():
+    decision = _person("Mary Smith-Jones will resign as chief executive officer.")
+    assert decision["person"] == "Mary Smith-Jones"
+    assert decision["resigned_or_retired"] is True
+
+
+def test_person_name_middle_initial():
+    decision = _person("Jane Q. Doe will step down as chief financial officer.")
+    assert decision["person"] == "Jane Q. Doe"
+
+
+def test_person_name_suffixes():
+    for name in ("John Smith Jr.", "John Smith Sr.", "John Smith II", "John Smith III"):
+        decision = _person(f"{name} will resign as chief executive officer.")
+        assert decision["person"] == name
+
+
+def test_person_name_accented_letters():
+    decision = _person("The Company appointed Jos\u00e9 N\u00fa\u00f1ez as chief executive officer.")
+    assert decision["person"] == "Jos\u00e9 N\u00fa\u00f1ez"
+
+
+def test_person_name_nbsp_becomes_a_space():
+    decision = _person("The Company appointed Jane\u00a0Doe as chief financial officer.")
+    assert decision["person"] == "Jane Doe"
+
+
+def test_card_line_keeps_accented_and_curly_names():
+    decision = _decide(
+        ["5.02"],
+        [_doc(
+            "The Company appointed Jos\u00e9 N\u00fa\u00f1ez as chief executive officer. "
+            "Sean O\u2019Brien resigned as chief financial officer."
+        )],
+    )
+    line = _line(decision)
+    assert "Jos\u00e9 N\u00fa\u00f1ez" in line
+    assert "Sean O\u2019Brien" in line
+    assert line == (
+        "NVIDIA announced that Jos\u00e9 N\u00fa\u00f1ez will become its chief executive officer. "
+        "NVIDIA announced that Sean O\u2019Brien, its chief financial officer, will step down."
+    )
+
+
+def test_unsure_person_names_stay_hidden():
+    for sentence in (
+        "The Company appointed jane doe as chief executive officer.",
+        "The Company appointed J. Doe as chief executive officer.",
+        "The Company appointed John2 Doe as chief financial officer.",
+        "The Company appointed John Sm!th as chief financial officer.",
+    ):
+        decision = _person(sentence)
+        assert decision["h3_category"] is None
+        assert decision["person"] is None
+        assert _line(decision) is None
+
+
+def test_past_effective_date_uses_past_tense_leadership_lines():
+    past = _person("The Company appointed Ada Lovelace as chief financial officer effective September 1, 2026.")
+    assert _line(past) == "NVIDIA announced that Ada Lovelace became its chief financial officer on Sep 1."
+
+    future = _person("The Company appointed Ada Lovelace as chief financial officer effective December 20, 2026.")
+    assert _line(future) == (
+        "NVIDIA announced that Ada Lovelace will become its chief financial officer, starting Dec 20."
+    )
+
+    resigned = _person("Jane Doe resigned as chief executive officer effective September 1, 2026.")
+    assert _line(resigned) == (
+        "NVIDIA announced that Jane Doe stepped down from the role of chief executive officer on Sep 1."
+    )
+
+    same_day = _person("The Company appointed Ada Lovelace as chief financial officer effective November 5, 2026.")
+    assert _line(same_day) == "NVIDIA announced that Ada Lovelace became its chief financial officer on Nov 5."
+
+    joined = _person("The Company appointed Mary Smith to the board of directors effective September 1, 2026.")
+    assert _line(joined) == "NVIDIA announced that Mary Smith joined its board of directors on Sep 1."
+
+    left = _person("Mary Smith will leave the board of directors effective September 1, 2026.")
+    assert _line(left) == "NVIDIA announced that Mary Smith left its board of directors on Sep 1."
 
 
 def test_negated_leadership_sentence_stays_hidden():
@@ -372,8 +469,9 @@ def test_new_york_date_across_utc_midnight():
     )
     assert decision["is_quarter"] is False
     line = _line(decision)
-    assert "latest results" in line
+    assert "shared its results" in line
     assert "quarterly" not in line
+    assert "latest" not in line
     assert "Nov 5" in line
     assert "Nov 6" not in line
 
@@ -523,7 +621,7 @@ def test_updates_filings_are_liked_confirmed_and_offline(client, monkeypatch):
         accession="0001045810-26-000010",
         ticker="NVDA",
         accepted_at="2026-11-06T02:00:00Z",
-        line="NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.",
+        line="NVIDIA shared its quarterly results in an SEC filing on Nov 5.",
         verified=True,
         category="earnings",
     )
@@ -552,7 +650,7 @@ def test_updates_filings_are_liked_confirmed_and_offline(client, monkeypatch):
         "short_name": "NVIDIA",
         "accession": "0001045810-26-000010",
         "date_ny": "2026-11-05",
-        "line": "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.",
+        "line": "NVIDIA shared its quarterly results in an SEC filing on Nov 5.",
         "filing_url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000010/0001045810-26-000010-index.html",
     }
     other_body = client.get("/updates", params={"user_id": other}).json()
@@ -570,7 +668,7 @@ def test_updates_omit_filings_whose_url_is_not_on_sec(client, monkeypatch):
         "0001045810-26-000010",
         "NVDA",
         "2026-11-06T02:00:00Z",
-        "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.",
+        "NVIDIA shared its quarterly results in an SEC filing on Nov 5.",
         True,
         "earnings",
         filing_url=good,
@@ -579,7 +677,7 @@ def test_updates_omit_filings_whose_url_is_not_on_sec(client, monkeypatch):
         "0001045810-26-000012",
         "NVDA",
         "2026-11-07T15:00:00Z",
-        "NVIDIA shared its latest results in an SEC filing on Nov 7.",
+        "NVIDIA shared its results in an SEC filing on Nov 7.",
         True,
         "earnings",
         filing_url="https://example.com/not-the-sec",
@@ -588,7 +686,7 @@ def test_updates_omit_filings_whose_url_is_not_on_sec(client, monkeypatch):
         "0001045810-26-000013",
         "NVDA",
         "2026-11-08T15:00:00Z",
-        "NVIDIA shared its latest results in an SEC filing on Nov 8.",
+        "NVIDIA shared its results in an SEC filing on Nov 8.",
         True,
         "earnings",
         filing_url="http://www.sec.gov/Archives/edgar/data/1045810/not-https.htm",
@@ -607,7 +705,7 @@ def test_updates_omit_filings_whose_url_is_not_on_sec(client, monkeypatch):
         "short_name": "NVIDIA",
         "accession": "0001045810-26-000010",
         "date_ny": "2026-11-05",
-        "line": "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.",
+        "line": "NVIDIA shared its quarterly results in an SEC filing on Nov 5.",
         "filing_url": good,
     }
 
@@ -615,7 +713,7 @@ def test_updates_omit_filings_whose_url_is_not_on_sec(client, monkeypatch):
 def test_duplicate_lines_keep_both_records_and_show_the_later_one(client):
     user_id = _onboard(client, ["gaming"])
     _like(client, user_id, "NVDA")
-    line = "NVIDIA shared its latest results in an SEC filing on Nov 1."
+    line = "NVIDIA shared its results in an SEC filing on Nov 1."
     _insert_filing("0001045810-26-000021", "NVDA", "2026-11-01T15:00:00Z", line, True, "earnings")
     _insert_filing("0001045810-26-000022", "NVDA", "2026-11-03T15:00:00Z", line, True, "earnings")
     _insert_filing(

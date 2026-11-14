@@ -181,7 +181,7 @@ def test_aapl_000024_earnings_line_includes_diluted_eps(monkeypatch):
     assert decision["measure"] == "diluted earnings per share"
     assert decision["figure"] == "$2.10"
     assert _line(decision, name="Apple", accepted_at="2026-11-02T21:30:23.000Z") == (
-        "Apple shared its latest quarterly results in an SEC filing on Nov 2. "
+        "Apple shared its quarterly results in an SEC filing on Nov 2. "
         "The company reported diluted earnings per share of $2.10."
     )
 
@@ -364,7 +364,7 @@ def test_msft_436122_shows_quarterly_results_on_oct_28():
     assert decision["hide_reason"] is None
     assert decision["is_quarter"] is True
     assert _line(decision, name="Microsoft", accepted_at="2026-10-28T20:30:00Z") == (
-        "Microsoft shared its latest quarterly results in an SEC filing on Oct 28."
+        "Microsoft shared its quarterly results in an SEC filing on Oct 28."
     )
 
 
