@@ -9,11 +9,13 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from app import db as dbmod
@@ -46,21 +48,31 @@ CIK_MAP_TTL = timedelta(days=30)
 SUBMISSIONS_TTL = timedelta(hours=6)
 DOCUMENT_TTL = timedelta(days=7)
 BACKOFF_TTL = timedelta(minutes=15)
+DOC_FAIL_BACKOFF = timedelta(hours=6)
+DOC_FAIL_LIMIT = 3
 MIN_INTERVAL_SECONDS = 1.0
 MAX_DOCUMENT_BYTES = 2_000_000
 FILING_CAP = 10
+# One place for the refresh queue: last 12 months, and at most this many newest per ticker.
+CANDIDATE_LOOKBACK_DAYS = 365
+CANDIDATE_LIMIT_PER_TICKER = 10
 
 CACHE_DIR = Path(__file__).resolve().parents[2] / "cache" / "sec"
 BACKOFF_KEY = "backoff"
 
 _last_request_at = 0.0
 _logged_missing_user_agent = False
+_throttle_lock = threading.Lock()
 
 
 class SecBlocked(Exception):
     def __init__(self, status: int):
         self.status = status
         super().__init__(f"HTTP {status}")
+
+
+class SecFetchFailed(Exception):
+    """A 5xx or timeout for one accession. The run continues with the others."""
 
 
 def sec_user_agent_is_set() -> bool:
@@ -344,6 +356,7 @@ def _store_filings(session, ticker: str, cik: str, payload: dict) -> None:
     accessions = recent.get("accessionNumber") if isinstance(recent, dict) else None
     if not isinstance(accessions, list):
         return
+    candidates = _candidate_accessions(recent)
     pending: dict[str, SecFiling] = {}
     for index, raw_accession in enumerate(accessions):
         accession = str(raw_accession or "").strip()
@@ -375,7 +388,7 @@ def _store_filings(session, ticker: str, cik: str, payload: dict) -> None:
         row.filed_at = _text(_at(recent, "filingDate", index))
         row.accepted_at = _text(_at(recent, "acceptanceDateTime", index))
         row.items = items_text
-        row.h3_candidate = h3_candidate_for_items(parse_items(items_text))
+        row.h3_candidate = accession in candidates
         row.filing_url = filing_url
         row.report_url = report_url
 
@@ -402,10 +415,13 @@ def _confirm_pending(user_agent: str) -> None:
                 "accepted_at": row.accepted_at,
             }
             for row in rows
-            if row.ticker not in SKIP_8K_TICKERS and row.form in KEPT_FORMS
+            if row.ticker not in SKIP_8K_TICKERS
+            and row.form in KEPT_FORMS
+            and not _document_backoff_active(session, row.accession)
         ]
     finally:
         session.close()
+    logger.info("SEC candidate filings queued=%s", len(pending))
     for item in pending:
         session = dbmod.SessionLocal()
         try:
@@ -419,6 +435,12 @@ def _confirm_pending(user_agent: str) -> None:
         except SecBlocked as blocked_error:
             _record_backoff(blocked_error.status)
             return
+        except SecFetchFailed:
+            count = _record_document_failure(item["accession"])
+            if count >= DOC_FAIL_LIMIT:
+                _mark_document_unreadable(item["accession"])
+            logger.warning("SEC document fetch failed for %s. failures=%s", item["accession"], count)
+            continue
         except Exception:
             logger.warning("SEC document fetch failed for %s. Keeping prior rows.", item["accession"])
             continue
@@ -536,35 +558,121 @@ def _fetch_one(url: str, user_agent: str, role: str, exhibit: str | None) -> dic
 
 
 def _find_exhibits(html: str, base_url: str) -> list[tuple[str, str]]:
+    """Exhibit links from this filing's index rows, in the same accession folder."""
     found = []
-    for match in _exhibit_anchors(html):
-        href, label = match
-        exhibit = _exhibit_number(label, href)
-        if exhibit is None:
+    seen = set()
+    for exhibit, href in _index_row_exhibits(html):
+        if not exhibit or not href:
             continue
         url = urllib.parse.urljoin(base_url, href)
-        if not _archive_url(url):
+        if not _same_filing_exhibit(url, base_url) or (exhibit, url) in seen:
             continue
+        seen.add((exhibit, url))
         found.append((exhibit, url))
     return found
 
 
-def _exhibit_anchors(html: str):
-    import re
+def _utc_today() -> date:
+    return datetime.now(timezone.utc).date()
 
+
+def _filing_day(value: str | None) -> date | None:
+    if not isinstance(value, str):
+        return None
+    match = re.match(r"(\d{4})-(\d{2})-(\d{2})", value.strip())
+    if match is None:
+        return None
+    try:
+        return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    except ValueError:
+        return None
+
+
+def _candidate_accessions(recent: dict) -> set[str]:
+    """Candidate accessions in one submissions payload: last 12 months, newest first, capped."""
+    accessions = recent.get("accessionNumber") if isinstance(recent, dict) else None
+    if not isinstance(accessions, list):
+        return set()
+    cutoff = _utc_today() - timedelta(days=CANDIDATE_LOOKBACK_DAYS)
+    latest: dict[str, tuple[date, str]] = {}
+    for index, raw_accession in enumerate(accessions):
+        accession = str(raw_accession or "").strip()
+        if not accession:
+            continue
+        form = _at(recent, "form", index)
+        form = form.strip() if isinstance(form, str) else ""
+        if form not in KEPT_FORMS:
+            continue
+        raw_items = _at(recent, "items", index)
+        items_text = raw_items if isinstance(raw_items, str) else None
+        filed = _filing_day(_text(_at(recent, "filingDate", index))) or _filing_day(
+            _text(_at(recent, "acceptanceDateTime", index))
+        )
+        if not h3_candidate_for_items(parse_items(items_text)) or filed is None or filed < cutoff:
+            latest.pop(accession, None)
+            continue
+        latest[accession] = (filed, accession)
+    ranked = sorted(latest.values(), reverse=True)
+    return {accession for _filed, accession in ranked[:CANDIDATE_LIMIT_PER_TICKER]}
+
+
+def _exhibit_anchors(html: str):
     for match in re.finditer(r"(?is)<a\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", html or ""):
         label = re.sub(r"(?is)<[^>]+>", " ", match.group(2))
         yield match.group(1), label
 
 
-def _exhibit_number(label: str, href: str) -> str | None:
-    import re
+_EXHIBIT_TYPE = re.compile(
+    r"^(?:EX(?:HIBIT)?[\s._-]*)?(\d{1,3})[.\-_](\d{1,3})$",
+    re.I,
+)
 
+
+def _exhibit_number(label: str, href: str) -> str | None:
+    """Exhibit number from a label or filename.
+
+    `msft-ex99_1.htm` uses a separator. `a8-kex991q4202609262026.htm` does not.
+    """
     blob = f"{label} {href}"
-    match = re.search(r"(?:exhibit|ex)[\s._-]*(\d{1,3})[.\-_](\d{1,3})", blob, re.I)
-    if match is None:
-        return None
-    return f"{int(match.group(1))}.{int(match.group(2))}"
+    separated = re.search(r"(?:exhibit|ex)[\s._-]*(\d{1,3})[.\-_](\d{1,3})", blob, re.I)
+    if separated:
+        return f"{int(separated.group(1))}.{int(separated.group(2))}"
+    glued = re.search(r"(?:exhibit|ex)(\d{1,3})(\d)(?!\d)", blob, re.I)
+    if glued:
+        return f"{int(glued.group(1))}.{int(glued.group(2))}"
+    return None
+
+
+def _preferred_doc_href(hrefs: list[str]) -> str | None:
+    docs = [href for href in hrefs if re.search(r"\.html?(?:$|\?)", href, re.I)]
+    plain = [href for href in docs if "ix?" not in href.lower() and not href.lower().startswith("/ix")]
+    if plain:
+        return plain[0]
+    if docs:
+        return docs[0]
+    return None
+
+
+def _index_row_exhibits(html: str) -> list[tuple[str, str]]:
+    """Pair a filing-index Type cell such as EX-99.1 with that row's document link."""
+    found = []
+    for row in re.findall(r"(?is)<tr\b[^>]*>(.*?)</tr>", html or ""):
+        cells = re.findall(r"(?is)<t[dh]\b[^>]*>(.*?)</t[dh]>", row)
+        if not cells:
+            continue
+        number = None
+        hrefs: list[str] = []
+        for cell in cells:
+            text = re.sub(r"\s+", " ", re.sub(r"(?is)<[^>]+>", " ", cell)).strip()
+            # A long cell that merely mentions "Exhibit 4.1" is not an index row.
+            match = _EXHIBIT_TYPE.match(text) if len(text) <= 40 else None
+            if match and number is None:
+                number = f"{int(match.group(1))}.{int(match.group(2))}"
+            hrefs.extend(re.findall(r"""(?is)href=["']([^"']+)["']""", cell))
+        href = _preferred_doc_href(hrefs)
+        if number and href:
+            found.append((number, href))
+    return found
 
 
 def _pick_exhibits(found: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -587,10 +695,22 @@ def _mentions_exhibit_991(text: str) -> bool:
     return re.search(r"exhibit\s*99\s*[\.\-_]?\s*1", text or "", re.I) is not None
 
 
+def _accession_folder(url: str) -> str | None:
+    for part in urllib.parse.urlparse(url).path.split("/"):
+        if re.fullmatch(r"\d{18}", part):
+            return part
+    return None
+
+
 def _archive_url(url: str) -> bool:
     parsed = urllib.parse.urlparse(url)
     host = (parsed.hostname or "").lower()
-    return host.endswith("sec.gov") and "/Archives/" in parsed.path
+    return parsed.scheme == "https" and host == "www.sec.gov" and "/Archives/" in parsed.path
+
+
+def _same_filing_exhibit(url: str, base_url: str) -> bool:
+    folder = _accession_folder(base_url)
+    return bool(folder) and folder == _accession_folder(url) and _archive_url(url)
 
 
 def _get_bytes(url: str, user_agent: str) -> tuple[str, int, bool]:
@@ -620,8 +740,16 @@ def _get_bytes(url: str, user_agent: str) -> tuple[str, int, bool]:
     except urllib.error.HTTPError as err:
         if err.code in {403, 429}:
             raise SecBlocked(err.code) from err
+        if 500 <= err.code <= 599:
+            raise SecFetchFailed() from err
         if err.code == 404:
             return "", 0, False
+        raise
+    except TimeoutError as err:
+        raise SecFetchFailed() from err
+    except urllib.error.URLError as err:
+        if isinstance(getattr(err, "reason", None), TimeoutError):
+            raise SecFetchFailed() from err
         raise
     raw = b"".join(chunks)
     return raw.decode("utf-8", errors="replace"), len(raw), False
@@ -647,11 +775,56 @@ def _read_chunk(response) -> bytes:
 
 def _throttle() -> None:
     global _last_request_at
-    interval = max(MIN_INTERVAL_SECONDS, 0.1)
-    wait = interval - (time.monotonic() - _last_request_at)
-    if wait > 0:
-        time.sleep(min(wait, interval))
-    _last_request_at = time.monotonic()
+    with _throttle_lock:
+        interval = max(MIN_INTERVAL_SECONDS, 0.1)
+        wait = interval - (time.monotonic() - _last_request_at)
+        if wait > 0:
+            time.sleep(min(wait, interval))
+        _last_request_at = time.monotonic()
+
+
+def _document_state_key(accession: str) -> str:
+    return f"docfail:{accession}"
+
+
+def _document_backoff_active(session, accession: str) -> bool:
+    row = session.get(SecFetchState, _document_state_key(accession))
+    if row is None or row.backoff_until is None:
+        return False
+    return row.backoff_until > utcnow()
+
+
+def _record_document_failure(accession: str) -> int:
+    key = _document_state_key(accession)
+    until = utcnow() + DOC_FAIL_BACKOFF
+    session = dbmod.SessionLocal()
+    try:
+        row = session.get(SecFetchState, key)
+        count = int(row.note) + 1 if row is not None and str(row.note or "").isdigit() else 1
+        if row is None:
+            session.add(SecFetchState(state_key=key, backoff_until=until, note=str(count)))
+        else:
+            row.backoff_until = until
+            row.note = str(count)
+        session.commit()
+        return count
+    finally:
+        session.close()
+
+
+def _mark_document_unreadable(accession: str) -> None:
+    session = dbmod.SessionLocal()
+    try:
+        row = session.get(SecFiling, accession)
+        if row is None or row.text_outcome is not None:
+            return
+        row.text_outcome = "unconfirmable"
+        row.verified = False
+        row.h3_category = None
+        row.summary_plain = None
+        session.commit()
+    finally:
+        session.close()
 
 
 def _accepted_sort(value: str | None) -> str:
