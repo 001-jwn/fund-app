@@ -361,9 +361,8 @@ def test_effective_date_without_a_year_uses_the_nearest_year():
         name="NVIDIA",
         fields=leap,
     )
-    assert leap_line == (
-        "NVIDIA announced that Ada Lovelace will become its chief financial officer, starting Feb 29."
-    )
+    assert leap_line is None
+    assert "Feb 29" not in (leap_line or "")
 
     december = _person("The Company appointed Ada Lovelace as chief financial officer effective December 31.")
     december_line = build_summary(
@@ -398,6 +397,16 @@ def test_effective_date_without_a_year_uses_the_nearest_year():
     assert new_year_line == (
         "NVIDIA announced that Ada Lovelace will become its chief financial officer, starting Jan 10."
     )
+
+    march = _person("The Company appointed Ada Lovelace as chief financial officer effective March 1.")
+    march_line = build_summary(
+        category=march.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-05T16:00:00Z",
+        name="NVIDIA",
+        fields=march,
+    )
+    assert march_line == "NVIDIA announced that Ada Lovelace became its chief financial officer on Mar 1."
 
 
 def test_leaving_name_is_not_truncated_and_titles_are_hidden():
@@ -481,11 +490,15 @@ def test_leading_date_clause_is_not_part_of_the_name():
     lead = _person("Effective May 1, Jane Doe will step down as chief financial officer.")
     assert lead["person"] == "Jane Doe"
     assert lead["eff_date"] == "May 1"
-    line = _line(lead)
-    assert "Effective" not in line
-    assert line == (
-        "NVIDIA announced that Jane Doe, its chief financial officer, will leave that role, starting May 1."
+    line = build_summary(
+        category=lead.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-05T16:00:00Z",
+        name="NVIDIA",
+        fields=lead,
     )
+    assert "Effective" not in line
+    assert line == "NVIDIA announced that Jane Doe left the role of chief financial officer on May 1."
 
 
 def test_honorifics_are_not_part_of_the_name():

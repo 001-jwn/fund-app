@@ -911,28 +911,43 @@ def _calendar_date(year: int, month: int, day: int):
         return None
 
 
-def _eff_on_or_before(eff_date: str | None, eff_year: int | None, filing_iso: str | None) -> bool:
+def _chosen_year(filing_month: int, filing_year: int, month: int, eff_year: int | None) -> int:
+    """Filing year, except a Nov/Dec filing naming Jan/Feb, or a Jan/Feb filing naming Nov/Dec."""
+    if eff_year is not None:
+        return eff_year
+    if filing_month in {11, 12} and month in {1, 2}:
+        return filing_year + 1
+    if filing_month in {1, 2} and month in {11, 12}:
+        return filing_year - 1
+    return filing_year
+
+
+def _placed_effective(eff_date: str | None, eff_year: int | None, filing_iso: str | None):
+    """Return the calendar date, or 'impossible' when that day does not exist in the chosen year."""
     if not eff_date or not filing_iso:
-        return False
+        return None
     parts = eff_date.split(" ")
     if len(parts) != 2 or parts[0] not in _MONTHS:
-        return False
+        return None
     filing = datetime.fromisoformat(filing_iso).date()
     month = _MONTHS.index(parts[0]) + 1
     day = int(parts[1])
-    if eff_year is not None:
-        effective = _calendar_date(eff_year, month, day)
-        return effective is not None and effective <= filing
-    # Stay in the filing year, unless the filing is within 60 days of New Year.
-    new_year = filing.replace(month=1, day=1)
-    next_new_year = new_year.replace(year=filing.year + 1)
-    near_new_year = (filing - new_year).days <= 60 or (next_new_year - filing).days <= 60
-    years = (filing.year - 1, filing.year, filing.year + 1) if near_new_year else (filing.year,)
-    candidates = [candidate for year in years if (candidate := _calendar_date(year, month, day)) is not None]
-    if not candidates:
+    year = _chosen_year(filing.month, filing.year, month, eff_year)
+    placed = _calendar_date(year, month, day)
+    if placed is None:
+        return "impossible"
+    return placed
+
+
+def _impossible_effective(person: dict, filing_iso: str | None) -> bool:
+    return _placed_effective(person.get("eff_date"), person.get("eff_year"), filing_iso) == "impossible"
+
+
+def _eff_on_or_before(eff_date: str | None, eff_year: int | None, filing_iso: str | None) -> bool:
+    placed = _placed_effective(eff_date, eff_year, filing_iso)
+    if placed is None or placed == "impossible" or not filing_iso:
         return False
-    effective = min(candidates, key=lambda candidate: (abs((candidate - filing).days), candidate))
-    return effective <= filing
+    return placed <= datetime.fromisoformat(filing_iso).date()
 
 
 def _earnings_line(name: str, phrase: str, pretty: str, fields: dict) -> str:
@@ -961,13 +976,24 @@ def _deal_line(name: str, phrase: str, pretty: str, fields: dict) -> str:
     return f"{name} reported a major deal in {phrase} on {pretty}. The filing has the details."
 
 
-def _leadership_line(name: str, phrase: str, pretty: str, fields: dict, filing_iso: str | None = None) -> str:
+def _leadership_line(name: str, phrase: str, pretty: str, fields: dict, filing_iso: str | None = None) -> str | None:
     people = fields.get("leaders_json")
-    if isinstance(people, list):
-        sentences = [_one_leader_line(name, person, filing_iso) for person in people[:2]]
-        sentences = [sentence for sentence in sentences if sentence]
+    if isinstance(people, list) and people:
+        sentences = []
+        blocked = False
+        for person in people[:2]:
+            if _impossible_effective(person, filing_iso):
+                blocked = True
+                continue
+            sentence = _one_leader_line(name, person, filing_iso)
+            if sentence:
+                sentences.append(sentence)
         if sentences:
             return " ".join(sentences)
+        if blocked:
+            return None
+    elif _impossible_effective(fields, filing_iso):
+        return None
     if fields.get("person") and fields.get("role") and fields.get("lead_direction"):
         sentence = _one_leader_line(name, fields, filing_iso)
         if sentence:
@@ -980,6 +1006,8 @@ def _one_leader_line(name: str, person: dict, filing_iso: str | None = None) -> 
     role = person.get("role")
     direction = person.get("lead_direction")
     if not who or not role or direction not in {"joining", "leaving"}:
+        return None
+    if _impossible_effective(person, filing_iso):
         return None
     eff = person.get("eff_date")
     past = _eff_on_or_before(eff, person.get("eff_year"), filing_iso)
