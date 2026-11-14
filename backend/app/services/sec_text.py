@@ -1033,14 +1033,14 @@ def _clear_leadership(fields: dict) -> None:
 
 
 def _stale_board_announcement(person: dict, filing_iso: str | None) -> bool:
-    """A board appointment whose only date is an earlier "On" announcement date."""
+    """A board appointment whose only date is an "On" date on or before the filing."""
     shown = person.get("board_on_date")
     if not shown or not filing_iso:
         return False
     placed = _placed_effective(shown, person.get("board_on_year"), filing_iso)
     if not isinstance(placed, date):
         return False
-    return placed < datetime.fromisoformat(filing_iso).date()
+    return placed <= datetime.fromisoformat(filing_iso).date()
 
 
 def _leader_roster(fields: dict) -> list[dict]:

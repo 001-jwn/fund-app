@@ -667,7 +667,7 @@ def test_earlier_board_announcement_without_an_effective_date_is_hidden():
         assert decision["eff_date"] is None
         assert "will become" not in (line or "")
 
-    same_day = _person("On November 5, 2026, the Board appointed Jane Doe as chief financial officer.")
+    same_day = _person("On November 5, 2026, the Board appointed Jane Doe as CFO.")
     same_line = build_summary(
         category=same_day.get("h3_category"),
         form="8-K",
@@ -675,7 +675,10 @@ def test_earlier_board_announcement_without_an_effective_date_is_hidden():
         name="NVIDIA",
         fields=same_day,
     )
-    assert same_line == "NVIDIA announced that Jane Doe will become its chief financial officer."
+    assert same_line is None
+    assert same_day["h3_category"] is None
+    assert same_day["person"] is None
+    assert "will become" not in (same_line or "")
 
 
 def test_one_contradictory_sentence_hides_the_whole_filing():
