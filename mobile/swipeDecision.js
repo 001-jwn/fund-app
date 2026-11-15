@@ -25,3 +25,11 @@ export function swipeDecision(dx, vx, width) {
   }
   return "";
 }
+
+// Release and terminate share this. A stolen gesture commits only when it is
+// still mostly horizontal and swipeDecision would like or dislike.
+export function horizontalSwipeAction(dx, dy, vx, width) {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return "";
+  if (!(Math.abs(dx) > Math.abs(dy))) return "";
+  return swipeDecision(dx, vx, width);
+}

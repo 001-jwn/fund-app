@@ -36,7 +36,7 @@ import {
   unlikeCompany,
 } from "./api";
 import { becauseLikedText, nextQueueAfterLike, priceLine } from "./cardText";
-import { swipeDecision } from "./swipeDecision";
+import { horizontalSwipeAction } from "./swipeDecision";
 
 const USER_KEY = "fund_user_id";
 
@@ -113,14 +113,40 @@ function CompanyFacts({ card, showNews }) {
   );
 }
 
-function SwipeableCard({ busy, onSwipe, children }) {
+function SwipeableCard({ busy, onSwipe, onSwipeStart, onSwipeEnd, children }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const onSwipeRef = useRef(onSwipe);
+  const onSwipeStartRef = useRef(onSwipeStart);
+  const onSwipeEndRef = useRef(onSwipeEnd);
   const busyRef = useRef(busy);
   const locked = useRef(false);
   const cardWidth = useRef(0);
+  const scrollHeld = useRef(false);
+  const granted = useRef(false);
   onSwipeRef.current = onSwipe;
+  onSwipeStartRef.current = onSwipeStart;
+  onSwipeEndRef.current = onSwipeEnd;
   busyRef.current = busy;
+
+  function holdScroll() {
+    if (scrollHeld.current) return;
+    scrollHeld.current = true;
+    onSwipeStartRef.current?.();
+  }
+
+  function releaseScroll() {
+    if (!scrollHeld.current) return;
+    scrollHeld.current = false;
+    onSwipeEndRef.current?.();
+  }
+
+  useEffect(() => {
+    return () => {
+      if (!scrollHeld.current) return;
+      scrollHeld.current = false;
+      onSwipeEndRef.current?.();
+    };
+  }, []);
 
   function springBack() {
     Animated.spring(pan, {
@@ -129,44 +155,67 @@ function SwipeableCard({ busy, onSwipe, children }) {
     }).start();
   }
 
+  function settle(gesture) {
+    granted.current = false;
+    releaseScroll();
+    if (locked.current) return;
+    const width = cardWidth.current > 0 ? cardWidth.current : Dimensions.get("window").width;
+    const action = horizontalSwipeAction(gesture.dx, gesture.dy, gesture.vx, width);
+    let toX = 0;
+    if (action === "like") toX = 500;
+    else if (action === "dislike") toX = -500;
+    if (!action || busyRef.current) {
+      springBack();
+      return;
+    }
+    locked.current = true;
+    Animated.timing(pan, {
+      toValue: { x: toX, y: 0 },
+      duration: 160,
+      useNativeDriver: false,
+    }).start(() => {
+      Promise.resolve(onSwipeRef.current(action)).finally(() => {
+        locked.current = false;
+        pan.setValue({ x: 0, y: 0 });
+      });
+    });
+  }
+
   const responder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_, gesture) => {
-        if (busyRef.current || locked.current) return false;
-        return Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy);
+        if (busyRef.current || locked.current) {
+          releaseScroll();
+          return false;
+        }
+        const horizontal = Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy);
+        if (horizontal) holdScroll();
+        else if (!granted.current) releaseScroll();
+        return horizontal;
+      },
+      onPanResponderGrant: () => {
+        granted.current = true;
+        holdScroll();
+      },
+      onPanResponderReject: () => {
+        granted.current = false;
+        releaseScroll();
       },
       // The card sits in a ScrollView. Once a horizontal swipe has started,
-      // keep the responder so the scroll view cannot cancel it and spring the card back.
+      // keep the responder. scrollEnabled is also turned off until this gesture ends.
       onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, gesture) => {
-        if (busyRef.current || locked.current) return;
+        if (busyRef.current || locked.current) {
+          releaseScroll();
+          return;
+        }
         pan.setValue({ x: gesture.dx, y: gesture.dy * 0.2 });
       },
       onPanResponderRelease: (_, gesture) => {
-        const width = cardWidth.current > 0 ? cardWidth.current : Dimensions.get("window").width;
-        const mostlyHorizontal = Math.abs(gesture.dx) > Math.abs(gesture.dy);
-        const action = mostlyHorizontal ? swipeDecision(gesture.dx, gesture.vx, width) : "";
-        let toX = 0;
-        if (action === "like") toX = 500;
-        else if (action === "dislike") toX = -500;
-        if (!action || busyRef.current || locked.current) {
-          springBack();
-          return;
-        }
-        locked.current = true;
-        Animated.timing(pan, {
-          toValue: { x: toX, y: 0 },
-          duration: 160,
-          useNativeDriver: false,
-        }).start(() => {
-          Promise.resolve(onSwipeRef.current(action)).finally(() => {
-            locked.current = false;
-            pan.setValue({ x: 0, y: 0 });
-          });
-        });
+        settle(gesture);
       },
-      onPanResponderTerminate: () => {
-        springBack();
+      onPanResponderTerminate: (_, gesture) => {
+        settle(gesture);
       },
     })
   ).current;
@@ -203,6 +252,7 @@ export default function App() {
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
   const [busy, setBusy] = useState(false);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
   const [error, setError] = useState("");
   const [finnhub, setFinnhub] = useState("off");
   const [unliking, setUnliking] = useState("");
@@ -517,7 +567,7 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen} edges={["top", "bottom", "left", "right"]}>
         <StatusBar style="dark" />
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView scrollEnabled={scrollEnabled} contentContainerStyle={styles.content}>
           <Text style={styles.title}>fun(d)</Text>
           <Text>Swipe stocks that match what you already care about.</Text>
 
@@ -569,7 +619,13 @@ export default function App() {
                 <Text>No more companies for your interests. Open Matches, or start over and pick different interests.</Text>
               ) : null}
               {current ? (
-                <SwipeableCard key={current.ticker} busy={busy} onSwipe={swipe}>
+                <SwipeableCard
+                  key={current.ticker}
+                  busy={busy}
+                  onSwipe={swipe}
+                  onSwipeStart={() => setScrollEnabled(false)}
+                  onSwipeEnd={() => setScrollEnabled(true)}
+                >
                   <View style={styles.card}>
                     <CompanyFacts card={current} showNews />
                     <Button title="Like" onPress={() => swipe("like")} disabled={busy} />

@@ -4,6 +4,7 @@ import {
   SWIPE_DISTANCE_FRACTION,
   SWIPE_FLICK_VELOCITY,
   SWIPE_MIN_FLICK_DISTANCE,
+  horizontalSwipeAction,
   swipeDecision,
 } from "../../mobile/swipeDecision.js";
 
@@ -79,6 +80,32 @@ test("a short move whose velocity points the other way is not a flick", () => {
 test("a release past the distance line still counts when velocity has reversed", () => {
   assert.equal(swipeDecision(DISTANCE, -1, CARD_WIDTH), "like");
   assert.equal(swipeDecision(-DISTANCE, 1, CARD_WIDTH), "dislike");
+});
+
+test("a slow very long horizontal drag commits when terminate or release asks", () => {
+  assert.equal(horizontalSwipeAction(220, 8, 0.02, CARD_WIDTH), "like");
+  assert.equal(horizontalSwipeAction(-220, -6, -0.02, CARD_WIDTH), "dislike");
+  assert.equal(horizontalSwipeAction(220, 8, 0, CARD_WIDTH), "like");
+});
+
+test("a mostly vertical drag does not commit even when it is long or fast", () => {
+  assert.equal(horizontalSwipeAction(80, 200, 0.02, CARD_WIDTH), "");
+  assert.equal(horizontalSwipeAction(-80, -200, -1.2, CARD_WIDTH), "");
+  assert.equal(horizontalSwipeAction(140, 140, 0, CARD_WIDTH), "");
+  assert.equal(horizontalSwipeAction(-140, 140, -0.8, CARD_WIDTH), "");
+});
+
+test("the horizontal boundary matches swipeDecision just past a tie", () => {
+  assert.equal(horizontalSwipeAction(DISTANCE, DISTANCE - 0.001, 0, CARD_WIDTH), "like");
+  assert.equal(horizontalSwipeAction(-DISTANCE, -(DISTANCE - 0.001), 0, CARD_WIDTH), "dislike");
+  assert.equal(horizontalSwipeAction(DISTANCE, DISTANCE, 0, CARD_WIDTH), "");
+  assert.equal(horizontalSwipeAction(40, 10, 0.8, CARD_WIDTH), "like");
+  assert.equal(horizontalSwipeAction(40, 39, 0.1, CARD_WIDTH), "");
+});
+
+test("a missing vertical sample does not commit", () => {
+  assert.equal(horizontalSwipeAction(200, Number.NaN, 0, CARD_WIDTH), "");
+  assert.equal(horizontalSwipeAction(Number.NaN, 0, 0, CARD_WIDTH), "");
 });
 
 test("a tap, a zero-width card, and non-finite input do nothing", () => {
