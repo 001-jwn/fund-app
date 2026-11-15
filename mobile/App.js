@@ -6,6 +6,7 @@ import {
   Alert,
   Animated,
   Button,
+  Dimensions,
   Image,
   PanResponder,
   Pressable,
@@ -35,9 +36,9 @@ import {
   unlikeCompany,
 } from "./api";
 import { becauseLikedText, nextQueueAfterLike, priceLine } from "./cardText";
+import { swipeDecision } from "./swipeDecision";
 
 const USER_KEY = "fund_user_id";
-const SWIPE_THRESHOLD = 120;
 
 const INTERESTS = [
   { id: "gaming", label: "Gaming" },
@@ -117,6 +118,7 @@ function SwipeableCard({ busy, onSwipe, children }) {
   const onSwipeRef = useRef(onSwipe);
   const busyRef = useRef(busy);
   const locked = useRef(false);
+  const cardWidth = useRef(0);
   onSwipeRef.current = onSwipe;
   busyRef.current = busy;
 
@@ -133,20 +135,20 @@ function SwipeableCard({ busy, onSwipe, children }) {
         if (busyRef.current || locked.current) return false;
         return Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy);
       },
+      // The card sits in a ScrollView. Once a horizontal swipe has started,
+      // keep the responder so the scroll view cannot cancel it and spring the card back.
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, gesture) => {
         if (busyRef.current || locked.current) return;
         pan.setValue({ x: gesture.dx, y: gesture.dy * 0.2 });
       },
       onPanResponderRelease: (_, gesture) => {
-        let action = "";
+        const width = cardWidth.current > 0 ? cardWidth.current : Dimensions.get("window").width;
+        const mostlyHorizontal = Math.abs(gesture.dx) > Math.abs(gesture.dy);
+        const action = mostlyHorizontal ? swipeDecision(gesture.dx, gesture.vx, width) : "";
         let toX = 0;
-        if (gesture.dx > SWIPE_THRESHOLD) {
-          action = "like";
-          toX = 500;
-        } else if (gesture.dx < -SWIPE_THRESHOLD) {
-          action = "dislike";
-          toX = -500;
-        }
+        if (action === "like") toX = 500;
+        else if (action === "dislike") toX = -500;
         if (!action || busyRef.current || locked.current) {
           springBack();
           return;
@@ -171,6 +173,9 @@ function SwipeableCard({ busy, onSwipe, children }) {
 
   return (
     <Animated.View
+      onLayout={(event) => {
+        cardWidth.current = event.nativeEvent.layout.width;
+      }}
       style={{ transform: [{ translateX: pan.x }, { translateY: pan.y }] }}
       {...responder.panHandlers}
     >

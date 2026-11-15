@@ -107,6 +107,12 @@ export const StyleSheet = { create: (styles) => styles };
     );
     entry = path.join(repoRoot, "mobile/UpdatesFeed.js");
     alias["react-native"] = shim;
+    // The phone bundle must use the same React as renderToStaticMarkup below.
+    // mobile/node_modules ships React 19, and a second copy makes elements unreadable.
+    const frontendReact = path.join(repoRoot, "frontend/node_modules/react");
+    alias.react = frontendReact;
+    alias["react/jsx-runtime"] = path.join(frontendReact, "jsx-runtime.js");
+    alias["react/jsx-dev-runtime"] = path.join(frontendReact, "jsx-dev-runtime.js");
   }
   await esbuild.build({
     absWorkingDir: repoRoot,
