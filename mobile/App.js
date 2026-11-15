@@ -253,10 +253,23 @@ export default function App() {
   userIdRef.current = userId;
   const [busy, setBusy] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
+  const scrollRef = useRef(null);
   const [error, setError] = useState("");
   const [finnhub, setFinnhub] = useState("off");
   const [unliking, setUnliking] = useState("");
   const swipeLock = useRef(false);
+
+  function setSwipeScrollEnabled(enabled) {
+    const view = scrollRef.current;
+    if (view != null && typeof view.setNativeProps === "function") {
+      view.setNativeProps({ scrollEnabled: enabled });
+    } else {
+      // This ScrollView class keeps setNativeProps on the native node.
+      const native = view?.getNativeScrollRef?.() ?? null;
+      native?.setNativeProps?.({ scrollEnabled: enabled });
+    }
+    setScrollEnabled(enabled);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -549,6 +562,7 @@ export default function App() {
         }
       }
     } catch (err) {
+      setSwipeScrollEnabled(true);
       setError(err.message);
     } finally {
       swipeLock.current = false;
@@ -567,7 +581,11 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen} edges={["top", "bottom", "left", "right"]}>
         <StatusBar style="dark" />
-        <ScrollView scrollEnabled={scrollEnabled} contentContainerStyle={styles.content}>
+        <ScrollView
+          ref={scrollRef}
+          scrollEnabled={scrollEnabled}
+          contentContainerStyle={styles.content}
+        >
           <Text style={styles.title}>fun(d)</Text>
           <Text>Swipe stocks that match what you already care about.</Text>
 
@@ -623,8 +641,8 @@ export default function App() {
                   key={current.ticker}
                   busy={busy}
                   onSwipe={swipe}
-                  onSwipeStart={() => setScrollEnabled(false)}
-                  onSwipeEnd={() => setScrollEnabled(true)}
+                  onSwipeStart={() => setSwipeScrollEnabled(false)}
+                  onSwipeEnd={() => setSwipeScrollEnabled(true)}
                 >
                   <View style={styles.card}>
                     <CompanyFacts card={current} showNews />
