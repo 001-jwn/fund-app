@@ -36,7 +36,7 @@ import {
   unlikeCompany,
 } from "./api";
 import { becauseLikedText, nextQueueAfterLike, priceLine } from "./cardText";
-import { horizontalSwipeAction } from "./swipeDecision";
+import { SWIPE_DISTANCE_FRACTION, swipeDecision } from "./swipeDecision";
 
 const USER_KEY = "fund_user_id";
 
@@ -121,6 +121,7 @@ function SwipeableCard({ busy, onSwipe, onSwipeStart, onSwipeEnd, children }) {
   const busyRef = useRef(busy);
   const locked = useRef(false);
   const cardWidth = useRef(0);
+  const [measuredWidth, setMeasuredWidth] = useState(0);
   const scrollHeld = useRef(false);
   const granted = useRef(false);
   onSwipeRef.current = onSwipe;
@@ -160,7 +161,9 @@ function SwipeableCard({ busy, onSwipe, onSwipeStart, onSwipeEnd, children }) {
     releaseScroll();
     if (locked.current) return;
     const width = cardWidth.current > 0 ? cardWidth.current : Dimensions.get("window").width;
-    const action = horizontalSwipeAction(gesture.dx, gesture.dy, gesture.vx, width);
+    // Claim already required |dx| > |dy|. A finger that drifts vertical after
+    // that still commits when the distance or flick test passes.
+    const action = swipeDecision(gesture.dx, gesture.vx, width);
     let toX = 0;
     if (action === "like") toX = 500;
     else if (action === "dislike") toX = -500;
@@ -220,12 +223,29 @@ function SwipeableCard({ busy, onSwipe, onSwipeStart, onSwipeEnd, children }) {
     })
   ).current;
 
+  const layoutWidth = measuredWidth > 0 ? measuredWidth : Dimensions.get("window").width;
+  const swipeLine = layoutWidth * SWIPE_DISTANCE_FRACTION;
+  // ±10 degrees when the finger reaches the commit line (25% of the card).
+  const tilt = pan.x.interpolate({
+    inputRange: [-swipeLine, 0, swipeLine],
+    outputRange: ["-10deg", "0deg", "10deg"],
+    extrapolate: "clamp",
+  });
+
   return (
     <Animated.View
       onLayout={(event) => {
-        cardWidth.current = event.nativeEvent.layout.width;
+        const next = event.nativeEvent.layout.width;
+        cardWidth.current = next;
+        setMeasuredWidth((prev) => (prev === next ? prev : next));
       }}
-      style={{ transform: [{ translateX: pan.x }, { translateY: pan.y }] }}
+      style={{
+        transform: [
+          { translateX: pan.x },
+          { translateY: pan.y },
+          { rotate: tilt },
+        ],
+      }}
       {...responder.panHandlers}
     >
       {children}
