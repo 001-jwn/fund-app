@@ -57,7 +57,7 @@ def test_cards_filter_by_interest_and_hide_holder_count(client):
     assert nvidia["why_line"] == (
         "You picked Gaming — NVIDIA makes the graphics chips inside many gaming PCs."
     )
-    assert nvidia["last_quarter_date"] == "2026-07-26"
+    assert nvidia["last_quarter_date"] == "2026-10-25"
     assert nvidia["company_name"] == "NVIDIA Corporation"
     assert nvidia["short_description"]
     assert nvidia["quarterly_summary"]
@@ -318,9 +318,9 @@ def test_refresh_stores_live_fields_and_keeps_seed_quarter_date(client, monkeypa
     assert nvidia["latest_news_summary"] == "A short summary of the news."
     assert nvidia["latest_news_date"] == "2026-11-02"
     assert nvidia["news_date_label"] == "News from Nov 2"
-    assert nvidia["quarter_label"] == "Last quarter (ended Jul 26, 2026)"
+    assert nvidia["quarter_label"] == "Last quarter (ended Oct 25, 2026)"
     assert nvidia["logo_url"] == "https://example.com/nvda.png"
-    assert nvidia["last_quarter_date"] == "2026-07-26"
+    assert nvidia["last_quarter_date"] == "2026-10-25"
     assert "holder_count" not in nvidia
 
     from app.db import SessionLocal
