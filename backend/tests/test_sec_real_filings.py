@@ -534,6 +534,55 @@ def test_candidate_cap_uses_the_shared_constants_and_logs_only_the_count(client,
     assert rows["0001045810-26-000007"] is False
 
 
+def test_confirm_of_something_else_still_shows_these_earnings_lines():
+    """A confirm that is not the outlook, in a sentence that mentions outlook or guidance,
+    is a restated outlook. These two filings stay shown with their current lines.
+    """
+    aapl_body_raw = _read("aapl-0000320193-26-000024-body.html")
+    aapl_exhibit_raw = _read("aapl-0000320193-26-000024-ex991.html")
+    aapl = decide_filing(
+        ticker="AAPL",
+        form="8-K",
+        items=["2.02", "9.01"],
+        accession="0000320193-26-000024",
+        documents=[
+            _doc(
+                plain_text(aapl_body_raw),
+                url="https://www.sec.gov/Archives/edgar/data/320193/000032019326000024/aapl-20261102.htm",
+                raw=aapl_body_raw,
+            ),
+            _doc(
+                plain_text(aapl_exhibit_raw),
+                url="https://www.sec.gov/Archives/edgar/data/320193/000032019326000024/a8-kex991q4202609262026.htm",
+                exhibit="99.1",
+                raw=aapl_exhibit_raw,
+            ),
+        ],
+    )
+    assert aapl["h3_category"] == "earnings"
+    assert _line(aapl, name="Apple", accepted_at="2026-11-02T21:30:23.000Z") == (
+        "Apple shared its quarterly results in an SEC filing on Nov 2. "
+        "The company reported diluted earnings per share of $2.10."
+    )
+
+    msft_body = plain_text(_read("msft-0001193125-26-436122-body.html"))
+    msft_exhibit = plain_text(_read("msft-0001193125-26-436122-ex991.txt"))
+    msft = decide_filing(
+        ticker="MSFT",
+        form="8-K",
+        items=["2.02", "9.01"],
+        accession="0001193125-26-436122",
+        documents=[
+            _doc(msft_body, url="https://www.sec.gov/Archives/edgar/data/789019/000119312526436122/msft-20261028.htm"),
+            _doc(msft_exhibit, url=MSFT_EXHIBIT, exhibit="99.1"),
+        ],
+    )
+    assert msft["h3_category"] == "earnings"
+    assert _line(msft, name="Microsoft", accepted_at="2026-10-28T20:30:00Z") == (
+        "Microsoft shared its quarterly results in an SEC filing on Oct 28."
+    )
+
+
 def test_ttwo_072175_reiterated_net_bookings_shows_earnings():
     text = plain_text(_read("ttwo-0001628280-26-072175-ex991.txt"))
     assert "reiterates expectation for Net Bookings of $8.0 to $8.2 billion" in text
