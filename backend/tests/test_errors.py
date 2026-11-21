@@ -43,6 +43,14 @@ def assert_api_error(response, status: int, code: str, detail: str) -> None:
     assert "\n" not in body["detail"]
 
 
+def test_method_not_allowed_keeps_the_allow_header(client):
+    response = client.post("/health")
+    assert response.status_code == 405
+    assert response.content == b'{"detail":"That didn\'t work. Please try again.","code":"bad_request"}'
+    allow = {part.strip() for part in response.headers["allow"].split(",")}
+    assert "GET" in allow
+
+
 def test_unknown_route_is_not_found(client):
     response = client.get("/not-a-route")
     assert_api_error(response, 404, "not_found", NOT_FOUND)

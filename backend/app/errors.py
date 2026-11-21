@@ -13,11 +13,13 @@ data_unavailable while a cached value can still be served.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 logger = logging.getLogger("fund.errors")
 
@@ -97,12 +99,22 @@ def error_body(status: int, detail: object = None, code: str | None = None) -> d
     return {"detail": public_detail(detail, chosen), "code": chosen}
 
 
-def json_error(status: int, detail: object = None, code: str | None = None) -> JSONResponse:
-    return JSONResponse(status_code=status, content=error_body(status, detail, code))
+def json_error(
+    status: int,
+    detail: object = None,
+    code: str | None = None,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
+    # headers keeps Allow on a 405. The body stays the two agreed fields.
+    return JSONResponse(
+        status_code=status,
+        content=error_body(status, detail, code),
+        headers=dict(headers) if headers else None,
+    )
 
 
 async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
-    return json_error(exc.status_code, exc.detail)
+    return json_error(exc.status_code, exc.detail, headers=exc.headers)
 
 
 async def validation_exception_handler(_request: Request, _exc: RequestValidationError) -> JSONResponse:
@@ -116,7 +128,39 @@ async def unhandled_exception_handler(request: Request, _exc: Exception) -> JSON
     return json_error(500, None, "server_error")
 
 
+class UnhandledErrorMiddleware:
+    """Turn an unhandled error into the server_error JSON before CORS sees it.
+
+    Starlette's own server-error handler sits outside user middleware, so a 500
+    produced there has no CORS headers. This wrapper is registered inside
+    CORSMiddleware and does not re-raise, so the browser can read the body.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        response_started = False
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception as exc:
+            if response_started:
+                raise
+            response = await unhandled_exception_handler(Request(scope), exc)
+            await response(scope, receive, send)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
-    app.add_exception_handler(Exception, unhandled_exception_handler)
