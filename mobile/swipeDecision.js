@@ -1,7 +1,9 @@
-// Release decision for a horizontal card swipe.
+// Release decision for a card swipe SwipeableCard has already claimed.
 // dx is the finger's horizontal travel in points.
 // vx is PanResponder's horizontal velocity in points per millisecond.
 // width is the card width in points (the screen width is a fine stand-in).
+// Vertical travel is not an input. The |dx| > |dy| check is only for claiming
+// the gesture. settle() calls swipeDecision and does not re-check it.
 
 export const SWIPE_DISTANCE_FRACTION = 0.25;
 export const SWIPE_FLICK_VELOCITY = 0.5;
@@ -26,8 +28,10 @@ export function swipeDecision(dx, vx, width) {
   return "";
 }
 
-// Release and terminate share this. A stolen gesture commits only when it is
-// still mostly horizontal and swipeDecision would like or dislike.
+// Still-horizontal gate. A drag that is not mostly horizontal does not commit
+// through this function. SwipeableCard does not call it from settle(): once
+// the gesture is claimed, release and terminate use swipeDecision so a later
+// vertical drift can still like or dislike.
 export function horizontalSwipeAction(dx, dy, vx, width) {
   if (!Number.isFinite(dx) || !Number.isFinite(dy)) return "";
   if (!(Math.abs(dx) > Math.abs(dy))) return "";

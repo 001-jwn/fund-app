@@ -108,6 +108,41 @@ test("a missing vertical sample does not commit", () => {
   assert.equal(horizontalSwipeAction(Number.NaN, 0, 0, CARD_WIDTH), "");
 });
 
+test("a claimed swipe that drifts vertical but passes 25% or the flick test still commits", () => {
+  // The gesture was already claimed (|dx| > |dy| at capture). By release the
+  // finger has drifted, so |dx| > |dy| is no longer true. settle() calls
+  // swipeDecision(dx, vx, width) and does not re-check that.
+  const drifted = [
+    { dx: DISTANCE, dy: DISTANCE + 120, vx: 0, action: "like" },
+    { dx: -DISTANCE, dy: -(DISTANCE + 80), vx: 0, action: "dislike" },
+    { dx: DISTANCE, dy: DISTANCE, vx: 0, action: "like" },
+    { dx: -DISTANCE, dy: DISTANCE, vx: -0.2, action: "dislike" },
+    { dx: 48, dy: 210, vx: SWIPE_FLICK_VELOCITY, action: "like" },
+    { dx: -36, dy: 140, vx: -0.9, action: "dislike" },
+    { dx: SWIPE_MIN_FLICK_DISTANCE, dy: 80, vx: SWIPE_FLICK_VELOCITY, action: "like" },
+    { dx: -SWIPE_MIN_FLICK_DISTANCE, dy: -90, vx: -SWIPE_FLICK_VELOCITY, action: "dislike" },
+  ];
+  for (const sample of drifted) {
+    assert.ok(!(Math.abs(sample.dx) > Math.abs(sample.dy)));
+    assert.equal(swipeDecision(sample.dx, sample.vx, CARD_WIDTH), sample.action);
+  }
+});
+
+test("a claimed swipe that drifts vertical and misses both thresholds does not commit", () => {
+  // |dy| is larger by release. settle() still asks swipeDecision only.
+  // Short and slow, or a flick that never clears 24 points, springs back.
+  const drifted = [
+    { dx: 40, dy: 160, vx: 0.2 },
+    { dx: -30, dy: -140, vx: -0.4 },
+    { dx: SWIPE_MIN_FLICK_DISTANCE - 0.001, dy: 90, vx: 2 },
+    { dx: -(SWIPE_MIN_FLICK_DISTANCE - 0.001), dy: -80, vx: -2 },
+  ];
+  for (const sample of drifted) {
+    assert.ok(!(Math.abs(sample.dx) > Math.abs(sample.dy)));
+    assert.equal(swipeDecision(sample.dx, sample.vx, CARD_WIDTH), "");
+  }
+});
+
 test("a tap, a zero-width card, and non-finite input do nothing", () => {
   assert.equal(swipeDecision(0, 2, CARD_WIDTH), "");
   assert.equal(swipeDecision(0, 0, CARD_WIDTH), "");
