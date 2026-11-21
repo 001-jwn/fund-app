@@ -164,28 +164,48 @@ def refresh_liked_8k_filings() -> None:
             session.commit()
         finally:
             session.close()
-    _sync_rules_version()
+    _redecide_from_cache()
     _confirm_pending(user_agent)
 
 
-def _sync_rules_version() -> None:
-    """Reset candidate decisions once when the stored rules version changes.
+def _redecide_from_cache() -> None:
+    """Re-apply the rules once, reading only documents already on disk.
 
-    The next confirm pass reads cached documents. It does not add a fetch.
+    Cache expiry is ignored. This pass never requests a document from the SEC.
+    A row with no cached document, or a cache that cannot be decided, is left
+    exactly as it is, including its line.
     """
     session = dbmod.SessionLocal()
     try:
-        row = session.get(SecFetchState, RULES_VERSION_KEY)
-        if row is not None and row.note == RULES_VERSION:
+        state = session.get(SecFetchState, RULES_VERSION_KEY)
+        if state is not None and state.note == RULES_VERSION:
             return
-        session.query(SecFiling).filter(SecFiling.h3_candidate.is_(True)).update(
-            {SecFiling.text_outcome: None, SecFiling.hide_reason: None},
-            synchronize_session=False,
+        rows = (
+            session.query(SecFiling)
+            .filter(SecFiling.h3_candidate.is_(True), SecFiling.text_outcome.is_not(None))
+            .all()
         )
-        if row is None:
+        for row in rows:
+            if row.ticker in SKIP_8K_TICKERS or row.form not in KEPT_FORMS:
+                continue
+            documents = _read_cached_documents(row.accession, ignore_expiry=True)
+            if not _documents_are_decidable(documents):
+                continue
+            company = session.get(Company, row.ticker)
+            if company is None:
+                continue
+            decision = decide_filing(
+                ticker=row.ticker,
+                form=row.form,
+                items=parse_items(row.items),
+                accession=row.accession,
+                documents=documents,
+            )
+            _apply_decision(row, decision, liked_display_name(company))
+        if state is None:
             session.add(SecFetchState(state_key=RULES_VERSION_KEY, note=RULES_VERSION))
         else:
-            row.note = RULES_VERSION
+            state.note = RULES_VERSION
         session.commit()
     finally:
         session.close()
@@ -335,7 +355,7 @@ def _mark_fetched(key: str) -> None:
         session.close()
 
 
-def _read_cache(path: Path, ttl: timedelta):
+def _read_cache(path: Path, ttl: timedelta, *, ignore_expiry: bool = False):
     if not path.is_file():
         return None
     try:
@@ -344,11 +364,32 @@ def _read_cache(path: Path, ttl: timedelta):
         if not isinstance(fetched, str):
             return None
         stamp = datetime.fromisoformat(fetched)
-        if utcnow() - stamp > ttl:
+        if not ignore_expiry and utcnow() - stamp > ttl:
             return None
         return wrapper.get("data")
     except (OSError, json.JSONDecodeError, ValueError):
         return None
+
+
+def _read_cached_documents(accession: str, *, ignore_expiry: bool = False):
+    cached = _read_cache(
+        CACHE_DIR / "documents" / f"{accession}.json",
+        DOCUMENT_TTL,
+        ignore_expiry=ignore_expiry,
+    )
+    return cached if isinstance(cached, list) else None
+
+
+def _documents_are_decidable(documents) -> bool:
+    """True when cached text is complete enough to decide without hiding a line by accident."""
+    if not isinstance(documents, list) or not documents:
+        return False
+    for doc in documents:
+        if not isinstance(doc, dict) or doc.get("too_long"):
+            continue
+        if not text_is_unreadable(doc.get("text") or ""):
+            return True
+    return False
 
 
 def _write_cache(path: Path, data) -> None:

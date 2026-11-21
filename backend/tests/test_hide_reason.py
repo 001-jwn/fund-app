@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.services.sec_text import build_summary, decide_filing
 
@@ -236,6 +236,169 @@ def test_restated_outlook_matches_reiterate_and_keeps_earnings():
     )
     assert call["hide_reason"] == "no_category"
     assert call["hide_reason"] != "restated_outlook"
+
+
+def test_original_restated_phrases_match_anywhere_in_the_sentence():
+    earnings = (
+        "The company announced financial results for its fiscal 2027 first quarter ended June 30, 2026. "
+        "Diluted earnings per share were $2.10. "
+    )
+    targets = _decide(
+        "TTWO",
+        "8-K",
+        ["2.02"],
+        earnings + "The Company reiterated its full-year targets.",
+        exhibit="99.1",
+    )
+    assert targets["h3_category"] == "earnings"
+    assert targets["hide_reason"] is None
+    targets_line = build_summary(
+        category=targets.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-09T21:00:00Z",
+        name="Take-Two",
+        fields=targets,
+    )
+    assert targets_line.startswith("Take-Two shared its quarterly results in an SEC filing on Nov 9.")
+
+    provided = _decide(
+        "MSFT",
+        "8-K",
+        ["2.02"],
+        earnings + "As provided on July 29, 2026, the Company expects fiscal 2027 revenue of $90 billion.",
+        exhibit="99.1",
+    )
+    assert provided["h3_category"] == "earnings"
+    assert provided["hide_reason"] is None
+    provided_line = build_summary(
+        category=provided.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-09T21:00:00Z",
+        name="Microsoft",
+        fields=provided,
+    )
+    assert provided_line.startswith("Microsoft shared its quarterly results")
+    assert "outlook" not in (provided_line or "").lower()
+
+    hidden = _decide(
+        "MSFT",
+        "8-K",
+        ["7.01"],
+        "The Company reiterated its fiscal 2027 targets. The Company raised its outlook for the next quarter.",
+    )
+    assert hidden["h3_category"] is None
+    assert hidden["hide_reason"] == "restated_outlook"
+    hidden_line = build_summary(
+        category=hidden.get("h3_category"),
+        form="8-K",
+        accepted_at="2026-11-09T21:00:00Z",
+        name="Microsoft",
+        fields=hidden,
+    )
+    assert hidden_line is None
+    assert "raised its outlook" not in (hidden_line or "")
+
+
+def test_expired_cache_is_redecided_without_a_network_call(client, monkeypatch, tmp_path):
+    from sqlalchemy.orm import Session
+
+    from app.db import SessionLocal
+    from app.models import SecFiling
+    from app.services import sec_filings as sec
+
+    monkeypatch.setattr(sec, "CACHE_DIR", tmp_path / "sec")
+    monkeypatch.setattr(sec.urllib.request, "urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("network")))
+    accession = "0001045810-26-000311"
+    text = "The Company declared a quarterly dividend of $0.25 per share. " * 4
+    cache = tmp_path / "sec" / "documents" / f"{accession}.json"
+    cache.parent.mkdir(parents=True)
+    stale = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)).isoformat()
+    cache.write_text(
+        json.dumps(
+            {
+                "fetched_at": stale,
+                "data": [{
+                    "url": EXHIBIT,
+                    "role": "main",
+                    "exhibit": None,
+                    "text": text,
+                    "raw": "",
+                    "too_long": False,
+                }],
+            }
+        ),
+        encoding="utf-8",
+    )
+    kept = "NVIDIA shared its quarterly results in an SEC filing on Nov 5."
+    session = SessionLocal()
+    session.add(
+        SecFiling(
+            accession=accession,
+            ticker="NVDA",
+            cik="0001045810",
+            form="8-K",
+            accepted_at="2026-11-06T02:00:00Z",
+            items="8.01",
+            h3_candidate=True,
+            h3_category="earnings",
+            verified=True,
+            text_outcome="confirmed",
+            summary_plain=kept,
+            filing_url="https://www.sec.gov/Archives/edgar/data/1045810/index.html",
+        )
+    )
+    missing = "0001045810-26-000312"
+    session.add(
+        SecFiling(
+            accession=missing,
+            ticker="NVDA",
+            cik="0001045810",
+            form="8-K",
+            accepted_at="2026-11-06T02:00:00Z",
+            items="2.02",
+            h3_candidate=True,
+            h3_category="earnings",
+            verified=True,
+            text_outcome="confirmed",
+            summary_plain=kept,
+            hide_reason=None,
+            filing_url="https://www.sec.gov/Archives/edgar/data/1045810/index.html",
+        )
+    )
+    session.commit()
+    session.close()
+
+    commits = {"n": 0}
+    real_commit = Session.commit
+
+    def counted_commit(self, *args, **kwargs):
+        commits["n"] += 1
+        return real_commit(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "commit", counted_commit)
+    sec._redecide_from_cache()
+    session = SessionLocal()
+    changed = session.get(SecFiling, accession)
+    assert changed.text_outcome == "unconfirmable"
+    assert changed.hide_reason == "no_category"
+    assert changed.summary_plain is None
+    untouched = session.get(SecFiling, missing)
+    assert untouched.text_outcome == "confirmed"
+    assert untouched.summary_plain == kept
+    assert untouched.h3_category == "earnings"
+    assert untouched.hide_reason is None
+    session.close()
+    assert commits["n"] == 1
+
+    commits["n"] = 0
+    sec._redecide_from_cache()
+    assert commits["n"] == 0
+    session = SessionLocal()
+    again = session.get(SecFiling, accession)
+    assert again.hide_reason == "no_category"
+    still = session.get(SecFiling, missing)
+    assert still.summary_plain == kept
+    session.close()
 
 
 def test_api_responses_omit_hide_reason(client):

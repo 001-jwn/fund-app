@@ -95,14 +95,15 @@ _GUIDANCE_LATER = re.compile(
     r"\b(?:will|to)\s+(?:provide|discuss|give|issue)\b[\s\S]{0,120}?\b(?:guidance|outlook)\b",
     re.I,
 )
-# A restated outlook is not a new event. Confirm, affirm, and reaffirm match reiterate.
+# The original restated phrases match anywhere in a sentence, as they did on main.
+_RESTATED_ANYWHERE = re.compile(
+    r"\bas provided on\b|\bno change to outlook\b|\breiterat(?:e|es|ed|ing)\b",
+    re.I,
+)
+# Confirm, affirm, and reaffirm count only in a sentence that also says outlook or guidance.
 _OUTLOOK_WORD = re.compile(r"\b(?:outlook|guidance)\b", re.I)
-_RESTATED_OUTLOOK = re.compile(
-    r"\bas provided on\b|\bno change to outlook\b|"
-    r"\breiterat(?:e|es|ed|ing)\b|"
-    r"\breaffirm(?:s|ed|ing)?\b|"
-    r"\baffirm(?:s|ed|ing)?\b|"
-    r"\bconfirm(?:s|ed|ing)?\b",
+_RESTATED_WITH_OUTLOOK = re.compile(
+    r"\breaffirm(?:s|ed|ing)?\b|\baffirm(?:s|ed|ing)?\b|\bconfirm(?:s|ed|ing)?\b",
     re.I,
 )
 _MONEY = r"\$[\d,]+(?:\.\d+)?"
@@ -880,7 +881,9 @@ def _guidance_sentence(sentence: str) -> bool:
 
 def _sentence_restates_outlook(sentence: str) -> bool:
     """True when this sentence repeats an earlier outlook instead of stating a new one."""
-    return _OUTLOOK_WORD.search(sentence) is not None and _RESTATED_OUTLOOK.search(sentence) is not None
+    if _RESTATED_ANYWHERE.search(sentence):
+        return True
+    return _OUTLOOK_WORD.search(sentence) is not None and _RESTATED_WITH_OUTLOOK.search(sentence) is not None
 
 
 def _outlook_is_restated(docs: list[dict]) -> bool:

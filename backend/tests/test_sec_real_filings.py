@@ -534,6 +534,29 @@ def test_candidate_cap_uses_the_shared_constants_and_logs_only_the_count(client,
     assert rows["0001045810-26-000007"] is False
 
 
+def test_ttwo_072175_reiterated_net_bookings_shows_earnings():
+    text = plain_text(_read("ttwo-0001628280-26-072175-ex991.txt"))
+    assert "reiterates expectation for Net Bookings of $8.0 to $8.2 billion" in text
+    assert "reiterating our outlook for Fiscal 2027 Net Bookings" in text
+    decision = decide_filing(
+        ticker="TTWO",
+        form="8-K",
+        items=["2.02", "9.01"],
+        accession="0001628280-26-072175",
+        documents=[_doc(
+            text,
+            url="https://www.sec.gov/Archives/edgar/data/946581/000162828026072175/ttwo2q27earningsrelease.htm",
+            exhibit="99.1",
+        )],
+    )
+    assert decision["h3_category"] == "earnings"
+    assert decision["hide_reason"] is None
+    assert decision["verified"] is True
+    line = _line(decision, name="Take-Two", accepted_at="2026-11-09T21:10:58Z")
+    assert line.startswith("Take-Two shared its quarterly results in an SEC filing on Nov 9.")
+    assert "outlook" not in line.lower()
+
+
 def test_msft_380280_restated_outlook_stays_hidden():
     body = plain_text(_read("msft-0001193125-26-380280-body.txt"))
     exhibit = plain_text(_read("msft-0001193125-26-380280-ex991.txt"))
@@ -622,7 +645,9 @@ def test_fresh_outlook_range_is_copied_verbatim():
 
 
 def test_guidance_probe_clear_direction_shows_and_unclear_hides():
-    """QA probe: clear raise/reaffirm may show. Mixed or missing direction stays hidden."""
+    """A clear raise may show. Reaffirming an outlook now hides; that change is intentional.
+    Mixed or missing direction stays hidden.
+    """
     pad = " The filing was furnished to the regulator on the date shown." * 4
     main = "Item 7.01 Regulation FD Disclosure. The company furnished an exhibit." + pad
     exhibit_url = "https://www.sec.gov/Archives/edgar/data/1/ex99.htm"
