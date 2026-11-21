@@ -95,9 +95,14 @@ _GUIDANCE_LATER = re.compile(
     r"\b(?:will|to)\s+(?:provide|discuss|give|issue)\b[\s\S]{0,120}?\b(?:guidance|outlook)\b",
     re.I,
 )
-# A restated outlook is not a new event. Hide the filing instead of saying "now expects".
+# A restated outlook is not a new event. Confirm, affirm, and reaffirm match reiterate.
+_OUTLOOK_WORD = re.compile(r"\b(?:outlook|guidance)\b", re.I)
 _RESTATED_OUTLOOK = re.compile(
-    r"\bas provided on\b|\bno change to outlook\b|\breiterat(?:e|es|ed|ing)\b",
+    r"\bas provided on\b|\bno change to outlook\b|"
+    r"\breiterat(?:e|es|ed|ing)\b|"
+    r"\breaffirm(?:s|ed|ing)?\b|"
+    r"\baffirm(?:s|ed|ing)?\b|"
+    r"\bconfirm(?:s|ed|ing)?\b",
     re.I,
 )
 _MONEY = r"\$[\d,]+(?:\.\d+)?"
@@ -182,19 +187,19 @@ def ny_dates(accepted_at: str | None) -> tuple[str, str] | None:
 
 def decide_filing(*, ticker: str, form: str, items: list[str], accession: str, documents: list[dict]) -> dict:
     """Decide from text. `retry` means a later run may try again."""
-    blank = _blank(outcome="unconfirmable")
     if ticker in {"NTES", "SONY", "SPOT", "TM", "RACE"}:
-        return blank
+        return _blank(outcome="unconfirmable", hide_reason="skipped_fpi")
     if form not in {"8-K", "8-K/A"}:
-        return blank
+        return _blank(outcome="unconfirmable", hide_reason="not_8k")
     usable = [doc for doc in documents if _usable(doc)]
     if form == "8-K/A":
+        blank = _blank(outcome="unconfirmable", hide_reason="amendment")
         blank["amends_accession"] = _prior_accession(accession, documents)
         return blank
     if any(doc.get("too_long") for doc in documents):
-        return blank
+        return _blank(outcome="unconfirmable", hide_reason="too_long")
     if not usable:
-        return blank
+        return _blank(outcome="unconfirmable", hide_reason="no_text")
 
     hits = []
     earnings = _earnings(items, usable)
@@ -213,16 +218,18 @@ def decide_filing(*, ticker: str, form: str, items: list[str], accession: str, d
         if len(hits) > 1:
             reason = "two_categories"
         elif _outlook_is_restated(usable):
-            reason = "ambiguous"
+            reason = "restated_outlook"
         else:
-            reason = None
+            reason = "no_category"
         return _blank(outcome="unconfirmable", hide_reason=reason)
     found = hits[0]
-    # A clear raise, lower, or reaffirmation can show. Mixed or missing direction cannot.
+    # A clear raise or lower can show. Mixed or missing direction cannot.
+    # The confirmed direction stays available, but a restated outlook never reaches it.
     if found.get("h3_category") == "guidance" and found.get("guide_direction") not in {"raised", "lowered", "confirmed"}:
-        return _blank(outcome="unconfirmable", hide_reason="ambiguous")
+        return _blank(outcome="unconfirmable", hide_reason="unclear_direction")
     found["text_outcome"] = "confirmed"
     found["verified"] = True
+    found["hide_reason"] = None
     return found
 
 
@@ -871,9 +878,14 @@ def _guidance_sentence(sentence: str) -> bool:
     return False
 
 
+def _sentence_restates_outlook(sentence: str) -> bool:
+    """True when this sentence repeats an earlier outlook instead of stating a new one."""
+    return _OUTLOOK_WORD.search(sentence) is not None and _RESTATED_OUTLOOK.search(sentence) is not None
+
+
 def _outlook_is_restated(docs: list[dict]) -> bool:
-    """True when the filing only repeats an earlier outlook."""
-    return any(_RESTATED_OUTLOOK.search(sentence) for sentence in _sentences(_combined(docs)))
+    """True when any sentence repeats an earlier outlook. Guidance is then not confirmed."""
+    return any(_sentence_restates_outlook(sentence) for sentence in _sentences(_combined(docs)))
 
 
 def _guidance_figure(sentences: list[str]) -> tuple[str | None, str | None]:

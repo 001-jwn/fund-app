@@ -386,7 +386,7 @@ def test_hidden_real_filings_stay_hidden():
         )
         assert decision["h3_category"] is None, name
         assert decision["verified"] is False
-        assert decision["hide_reason"] is None
+        assert decision["hide_reason"] == "no_category"
         assert _line(decision, name="NVIDIA", accepted_at="2026-11-01T16:00:00Z") is None
 
 
@@ -556,7 +556,7 @@ def test_msft_380280_restated_outlook_stays_hidden():
     )
     assert decision["h3_category"] is None
     assert decision["verified"] is False
-    assert decision["hide_reason"] == "ambiguous"
+    assert decision["hide_reason"] == "restated_outlook"
     assert decision["figure"] is None
     line = _line(decision, name="Microsoft", accepted_at="2026-09-02T20:30:24Z")
     assert line is None
@@ -575,7 +575,7 @@ def test_msft_380280_restated_outlook_stays_hidden():
         documents=[_doc(restated, url="https://www.sec.gov/Archives/edgar/data/789019/000119312526380280/ex.htm", exhibit="99.1")],
     )
     assert again["h3_category"] is None
-    assert again["hide_reason"] == "ambiguous"
+    assert again["hide_reason"] == "restated_outlook"
     assert _line(again, name="Microsoft", accepted_at="2026-09-02T20:30:24Z") is None
 
 
@@ -657,12 +657,12 @@ def test_guidance_probe_clear_direction_shows_and_unclear_hides():
         "Testco reaffirmed its outlook for fiscal 2027. "
         "Revenue is expected to be $89.85 to $90.95 billion."
     )
-    assert reaffirmed["h3_category"] == "guidance"
-    assert reaffirmed["guide_direction"] == "confirmed"
-    assert line == (
-        "Testco confirmed its earlier outlook for fiscal 2027, according to an SEC filing on Sep 2. "
-        "The company now expects revenue of $89.85 to $90.95 billion."
-    )
+    assert reaffirmed["h3_category"] is None
+    assert reaffirmed["verified"] is False
+    assert reaffirmed["hide_reason"] == "restated_outlook"
+    assert reaffirmed["text_outcome"] != "confirmed"
+    assert line is None
+    assert "confirmed its earlier outlook" not in (line or "")
 
     billion_each, line = run(
         "Testco raised its outlook for fiscal 2027. "
@@ -690,7 +690,7 @@ def test_guidance_probe_clear_direction_shows_and_unclear_hides():
         hidden, line = run(text)
         assert hidden["h3_category"] is None
         assert hidden["verified"] is False
-        assert hidden["hide_reason"] == "ambiguous"
+        assert hidden["hide_reason"] == "unclear_direction"
         assert hidden["text_outcome"] != "confirmed"
         assert line is None
 

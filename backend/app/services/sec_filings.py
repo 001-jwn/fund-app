@@ -42,6 +42,9 @@ H3_CANDIDATE_ITEMS = frozenset({"1.01", "2.01", "2.02", "5.02", "7.01", "8.01"})
 KEPT_FORMS = frozenset({"8-K", "8-K/A"})
 
 ENV_USER_AGENT = "SEC_USER_AGENT"
+RULES_VERSION_KEY = "rules_version"
+# Bumped when confirmation rules change so candidate rows are read again once.
+RULES_VERSION = "m4-p0a"
 CIK_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 CIK_MAP_TTL = timedelta(days=30)
@@ -161,7 +164,31 @@ def refresh_liked_8k_filings() -> None:
             session.commit()
         finally:
             session.close()
+    _sync_rules_version()
     _confirm_pending(user_agent)
+
+
+def _sync_rules_version() -> None:
+    """Reset candidate decisions once when the stored rules version changes.
+
+    The next confirm pass reads cached documents. It does not add a fetch.
+    """
+    session = dbmod.SessionLocal()
+    try:
+        row = session.get(SecFetchState, RULES_VERSION_KEY)
+        if row is not None and row.note == RULES_VERSION:
+            return
+        session.query(SecFiling).filter(SecFiling.h3_candidate.is_(True)).update(
+            {SecFiling.text_outcome: None, SecFiling.hide_reason: None},
+            synchronize_session=False,
+        )
+        if row is None:
+            session.add(SecFetchState(state_key=RULES_VERSION_KEY, note=RULES_VERSION))
+        else:
+            row.note = RULES_VERSION
+        session.commit()
+    finally:
+        session.close()
 
 
 def filings_for_user(session, user_id: str) -> list[dict]:
@@ -470,7 +497,9 @@ def _apply_decision(row: SecFiling, decision: dict, name: str) -> None:
     if isinstance(leaders, list):
         fields["leaders_json"] = leaders
     line = None
-    if decision.get("text_outcome") == "confirmed" and category:
+    outcome = decision.get("text_outcome")
+    reason = decision.get("hide_reason")
+    if outcome == "confirmed" and category:
         line = build_summary(
             category=category,
             form=row.form,
@@ -480,9 +509,20 @@ def _apply_decision(row: SecFiling, decision: dict, name: str) -> None:
         )
         if line is None:
             category = None
-            decision = {**decision, "text_outcome": "unconfirmable", "verified": False, "h3_category": None}
-    row.text_outcome = decision.get("text_outcome")
-    row.verified = bool(decision.get("verified")) and bool(line)
+            outcome = "unconfirmable"
+            if decision.get("h3_category") == "leadership" and fields.get("text_outcome") == "unconfirmable":
+                reason = "leadership_rejected"
+            else:
+                reason = "no_line"
+        else:
+            reason = None
+    elif outcome == "unconfirmable":
+        reason = reason or "no_category"
+    else:
+        reason = None
+    row.text_outcome = outcome
+    row.hide_reason = reason if outcome == "unconfirmable" else None
+    row.verified = outcome == "confirmed" and bool(line)
     row.h3_category = category if line else None
     row.summary_plain = line
     if decision.get("amends_accession"):
@@ -819,6 +859,7 @@ def _mark_document_unreadable(accession: str) -> None:
         if row is None or row.text_outcome is not None:
             return
         row.text_outcome = "unconfirmable"
+        row.hide_reason = "no_text"
         row.verified = False
         row.h3_category = None
         row.summary_plain = None
