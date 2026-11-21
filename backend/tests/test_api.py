@@ -33,9 +33,18 @@ def test_onboarding_creates_user_and_rejects_bad_input(client):
 
     empty = client.post("/onboarding", json={"interests": []})
     assert empty.status_code == 400
+    assert empty.json() == {
+        "detail": "Pick at least one interest.",
+        "code": "bad_request",
+    }
 
     unknown = client.post("/onboarding", json={"interests": ["crypto"]})
     assert unknown.status_code == 400
+    assert unknown.json() == {
+        "detail": "That interest isn't available. Please pick from Gaming, Travel, Music, or Automobile.",
+        "code": "bad_request",
+    }
+    assert "crypto" not in unknown.text
 
 
 def test_cards_filter_by_interest_and_hide_holder_count(client):
@@ -451,10 +460,16 @@ def test_like_and_dislike_reject_ticker_outside_interests(client):
     user_id = _onboard(client, ["gaming"])
     liked = client.post("/like", json={"user_id": user_id, "ticker": "BKNG"})
     assert liked.status_code == 400
-    assert "interest" in liked.json()["detail"].lower()
+    assert liked.json() == {
+        "detail": "That company doesn't match the interests you picked.",
+        "code": "bad_request",
+    }
     disliked = client.post("/dislike", json={"user_id": user_id, "ticker": "HLT"})
     assert disliked.status_code == 400
-    assert "interest" in disliked.json()["detail"].lower()
+    assert disliked.json() == {
+        "detail": "That company doesn't match the interests you picked.",
+        "code": "bad_request",
+    }
     matches = client.get("/matches", params={"user_id": user_id})
     assert matches.json()["matches"] == []
     cards = {card["ticker"] for card in _cards(client, user_id)}

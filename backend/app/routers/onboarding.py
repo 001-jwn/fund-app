@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db, utcnow
+from app.errors import PICK_ONE_INTEREST, UNKNOWN_INTEREST
 from app.interests import ALLOWED_INTERESTS
 from app.models import User, UserInterest
 from app.schemas import OnboardingIn, OnboardingOut
@@ -22,16 +23,12 @@ def onboarding(body: OnboardingIn, db: Session = Depends(get_db)) -> OnboardingO
     for raw in body.interests:
         interest = str(raw).strip().lower()
         if interest not in ALLOWED:
-            allowed = ", ".join(ALLOWED_INTERESTS)
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unknown interest '{interest}'. Choose from: {allowed}.",
-            )
+            raise HTTPException(status_code=400, detail=UNKNOWN_INTEREST)
         if interest not in chosen:
             chosen.append(interest)
 
     if not chosen:
-        raise HTTPException(status_code=400, detail="Pick at least one interest.")
+        raise HTTPException(status_code=400, detail=PICK_ONE_INTEREST)
 
     user = User(id=str(uuid.uuid4()), created_at=utcnow())
     db.add(user)

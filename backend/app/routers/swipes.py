@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db, utcnow
+from app.errors import COMPANY_NOT_ACTIVE, COMPANY_NOT_FOUND, OUTSIDE_INTERESTS, USER_NOT_FOUND
 from app.models import (
     Alert,
     AlertBaseline,
@@ -26,12 +27,12 @@ def _user_and_company(db: Session, user_id: str, ticker: str) -> tuple[User, Com
     ticker = ticker.strip().upper()
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
     company = db.get(Company, ticker)
     if company is None:
-        raise HTTPException(status_code=404, detail="Company not found.")
+        raise HTTPException(status_code=404, detail=COMPANY_NOT_FOUND)
     if company.status != "active":
-        raise HTTPException(status_code=400, detail="That company is not active.")
+        raise HTTPException(status_code=400, detail=COMPANY_NOT_ACTIVE)
     _require_user_interest(db, user_id, ticker)
     return user, company, ticker
 
@@ -41,10 +42,10 @@ def _known_user_and_company(db: Session, user_id: str, ticker: str) -> tuple[Use
     ticker = ticker.strip().upper()
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
     company = db.get(Company, ticker)
     if company is None:
-        raise HTTPException(status_code=404, detail="Company not found.")
+        raise HTTPException(status_code=404, detail=COMPANY_NOT_FOUND)
     return user, company, ticker
 
 
@@ -56,10 +57,7 @@ def _require_user_interest(db: Session, user_id: str, ticker: str) -> None:
         row.interest for row in db.query(CompanyInterest).filter(CompanyInterest.ticker == ticker).all()
     }
     if not user_interests.intersection(company_interests):
-        raise HTTPException(
-            status_code=400,
-            detail="That company is outside the interests you picked.",
-        )
+        raise HTTPException(status_code=400, detail=OUTSIDE_INTERESTS)
 
 
 @router.post("/like", response_model=SwipeOut)

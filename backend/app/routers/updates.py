@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.errors import USER_NOT_FOUND
 from app.models import Alert, Company, Match, User
 from app.schemas import AlertOut, FilingOut, UpdateOut, UpdatesOut
 from app.services.cards import liked_display_name
@@ -28,7 +29,7 @@ router = APIRouter()
 def get_updates(user_id: str = Query(...), db: Session = Depends(get_db)) -> UpdatesOut:
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
     try:
         detect_for_user(db, user_id)
