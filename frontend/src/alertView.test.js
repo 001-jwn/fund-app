@@ -305,7 +305,7 @@ test("web and phone screens render UpdatesFeed from the latest digest", () => {
   }
 });
 
-const NVDA_FILING = "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.";
+const NVDA_FILING = "NVIDIA shared its quarterly results in an SEC filing on Nov 5.";
 const AMD_FILING = "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.";
 const NVDA_URL = "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000010/0001045810-26-000010-index.html";
 const AMD_URL = "https://www.sec.gov/Archives/edgar/data/2488/000000248826000020/0000002488-26-000020-index.html";
@@ -372,7 +372,7 @@ test("filings stay in server order with the line and link untouched", () => {
 });
 
 test("only an https filing url becomes a link", () => {
-  const httpsLine = "NVIDIA shared its latest quarterly results in an SEC filing on Nov 5.";
+  const httpsLine = "NVIDIA shared its quarterly results in an SEC filing on Nov 5.";
   const httpLine = "AMD reported a major deal in an SEC filing on Nov 4. The filing has the details.";
   const scriptLine = "Sony agreed to acquire Example Co, according to an SEC filing on Nov 3.";
   const missingLine = "Roblox confirmed its earlier outlook, according to an SEC filing on Nov 2.";
