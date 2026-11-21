@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.errors import USER_NOT_FOUND
 from app.models import Company, CompanyInterest, Dislike, Like, User, UserInterest
 from app.schemas import CardOut, CardsOut
 from app.services.cards import (
@@ -17,16 +18,20 @@ from app.services.cards import (
 
 router = APIRouter()
 
+# Omitted `limit` stays 10, which is what main returns today.
+DEFAULT_CARD_LIMIT = 10
+MAX_CARD_LIMIT = 50
+
 
 @router.get("/cards", response_model=CardsOut)
 def get_cards(
     user_id: str = Query(...),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(DEFAULT_CARD_LIMIT, ge=1, le=MAX_CARD_LIMIT),
     db: Session = Depends(get_db),
 ) -> CardsOut:
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
     interest_rows = db.query(UserInterest).filter(UserInterest.user_id == user_id).all()
     user_interests = {row.interest for row in interest_rows}

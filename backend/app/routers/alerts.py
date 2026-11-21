@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.errors import USER_NOT_FOUND
 from app.models import Alert, User
 from app.schemas import AlertsSeenIn, AlertsSeenOut
 
@@ -16,7 +17,7 @@ router = APIRouter()
 def mark_alerts_seen(body: AlertsSeenIn, db: Session = Depends(get_db)) -> AlertsSeenOut:
     user = db.get(User, body.user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
     db.query(Alert).filter(Alert.user_id == body.user_id, Alert.seen.is_(False)).update(
         {Alert.seen: True},
         synchronize_session=False,

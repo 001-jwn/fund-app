@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.errors import USER_NOT_FOUND
 from app.models import Company, CompanyInterest, Match, User, UserInterest
 from app.schemas import MatchOut, MatchesOut
 from app.services.cards import choose_interest_link, public_card
@@ -17,7 +18,7 @@ router = APIRouter()
 def get_matches(user_id: str = Query(...), db: Session = Depends(get_db)) -> MatchesOut:
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
     interest_rows = db.query(UserInterest).filter(UserInterest.user_id == user_id).all()
     user_interests = {row.interest for row in interest_rows}

@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import db as dbmod
 from app.db import configure_engine, init_db
+from app.errors import register_exception_handlers
 from app.routers import alerts, cards, matches, onboarding, swipes, updates
 from app.schemas import HealthOut
 from app.services.live import finnhub_mode_label, start_refresher, stop_refresher
@@ -54,6 +55,7 @@ def allowed_origins() -> list[str]:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="fun(d)", lifespan=lifespan)
+    register_exception_handlers(app)
     # No cookies or auth, so credentials stay off and "*" is a valid default.
     app.add_middleware(
         CORSMiddleware,
