@@ -24,8 +24,8 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $96.2 billion, up 106% from a year ago. Sales of chips for big data centers were $89.0 billion, up 117%, as customers kept buying chips to run AI.",
-      "last_quarter_date": "2026-07-26",
+      "quarterly_summary": "Revenue was $115.8 billion, up 103% from a year ago. Sales of chips for big data centers were $107.6 billion, up 110%.",
+      "last_quarter_date": "2026-10-25",
       "logo_url": null,
       "data_updated_at": null,
       "interest_tags": [
@@ -43,7 +43,8 @@
         }
       ],
       "content_sources": [
-        "https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Announces-Financial-Results-for-Second-Quarter-Fiscal-2027/default.aspx"
+        "https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Announces-Financial-Results-for-Second-Quarter-Fiscal-2027/default.aspx",
+        "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000088/q3fy27pr.htm (NVIDIA Q3 FY2027 results press release, Nov 17, 2026)"
       ]
     },
     {
@@ -157,8 +158,8 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was about 30.1 billion Chinese yuan (RMB, about US$4.4 billion), up 7.9% from a year ago. Games brought in about RMB25.0 billion (about US$3.7 billion), up 9.7%, as titles like Fantasy Westward Journey and Where Winds Meet kept players spending. NetEase reports in yuan, but its U.S. stock price is in dollars.",
-      "last_quarter_date": "2026-06-30",
+      "quarterly_summary": "Revenue was about 27.9 billion Chinese yuan (RMB, about US$4.2 billion), down 1.8% from a year ago. Games brought in about RMB22.9 billion (about US$3.4 billion), down 1.7%; NetEase reports in yuan, but its U.S. stock price is in dollars.",
+      "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
       "interest_tags": [
@@ -177,7 +178,8 @@
       ],
       "content_sources": [
         "https://www.sec.gov/Archives/edgar/data/1110646/000110465926098940/tm2623482d1_ex99-1.htm (NetEase Q2 / interim 2026 results announcement, Aug 20, 2026)",
-        "https://www.hkexnews.hk/listedco/listconews/sehk/2026/0924/2026092401601.pdf (NetEase Interim Report 2026)"
+        "https://www.hkexnews.hk/listedco/listconews/sehk/2026/0924/2026092401601.pdf (NetEase Interim Report 2026)",
+        "https://www.sec.gov/Archives/edgar/data/1110646/000110465926129894/tm2630023d1_ex99-1.htm (NetEase Q3 2026 results, Nov 19, 2026)"
       ]
     },
     {
@@ -624,8 +626,8 @@
       "latest_news_headline": null,
       "latest_news_summary": null,
       "latest_news_date": null,
-      "quarterly_summary": "Revenue was $1.86 billion, up 10.4% from a year ago. Money from both its artists' recordings and the rights to the songs themselves helped the gain.",
-      "last_quarter_date": "2026-06-30",
+      "quarterly_summary": "Revenue was $2.0 billion, up 7% from a year ago, an all-time high for a quarter. Money from its recorded-music streaming subscriptions grew 15%.",
+      "last_quarter_date": "2026-09-30",
       "logo_url": null,
       "data_updated_at": null,
       "interest_tags": [
@@ -643,7 +645,8 @@
         }
       ],
       "content_sources": [
-        "https://investors.wmg.com/news-events/news-releases/news-details/2026/Warner-Music-Group-Corp--Reports-Results-for-Fiscal-Third-Quarter-Ended-June-30-2026/default.aspx"
+        "https://investors.wmg.com/news-events/news-releases/news-details/2026/Warner-Music-Group-Corp--Reports-Results-for-Fiscal-Third-Quarter-Ended-June-30-2026/default.aspx",
+        "https://www.sec.gov/Archives/edgar/data/1319161/000131916126000040/q42026ex991.htm (WMG fiscal Q4 2026 results, Nov 19, 2026)"
       ]
     },
     {
