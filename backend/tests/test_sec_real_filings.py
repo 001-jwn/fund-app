@@ -584,6 +584,7 @@ def test_confirm_of_something_else_still_shows_these_earnings_lines():
 
 
 def test_ttwo_072175_reiterated_net_bookings_shows_earnings():
+    """The fixture is a verbatim excerpt of selected lines from the exhibit."""
     text = plain_text(_read("ttwo-0001628280-26-072175-ex991.txt"))
     assert "reiterates expectation for Net Bookings of $8.0 to $8.2 billion" in text
     assert "reiterating our outlook for Fiscal 2027 Net Bookings" in text
