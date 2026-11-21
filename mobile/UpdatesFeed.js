@@ -2,6 +2,7 @@ import { Linking, Pressable, Text, View } from "react-native";
 import {
   FILING_LINK_LABEL,
   alertKindLabel,
+  companyHeading,
   filingHelpers,
   helperForAlert,
   newsAlertUrl,
@@ -12,6 +13,7 @@ function AlertCard({ alert, helper, onLinkError, styles }) {
   const url = newsAlertUrl(alert);
   const line = typeof alert.line === "string" ? alert.line : "";
   const unseen = alert.seen !== true;
+  const heading = companyHeading(alert);
   const lineStyle = [styles.row, unseen ? styles.unseen : null, url ? styles.link : null];
   return (
     <View style={styles.alertCard}>
@@ -19,12 +21,12 @@ function AlertCard({ alert, helper, onLinkError, styles }) {
         Alert · {alertKindLabel(alert.kind)}
         {unseen ? " · New" : ""}
       </Text>
-      <Text style={styles.row}>{alert.ticker}</Text>
+      {heading ? <Text style={styles.company}>{heading}</Text> : null}
       {url ? (
         <Pressable
           onPress={() => {
             Linking.openURL(url).catch(() => {
-              onLinkError("Could not open that link.");
+              onLinkError("Couldn't open that link. Try again.");
             });
           }}
         >
@@ -41,9 +43,10 @@ function AlertCard({ alert, helper, onLinkError, styles }) {
 function DailyCard({ update, onLinkError, styles }) {
   const lines = Array.isArray(update.lines) ? update.lines : [];
   const newsUrl = typeof update.news_url === "string" && update.news_url ? update.news_url : null;
+  const heading = companyHeading(update);
   return (
     <View style={styles.card}>
-      <Text style={styles.company}>{update.ticker}</Text>
+      {heading ? <Text style={styles.company}>{heading}</Text> : null}
       {lines.map((line, index) => {
         const linked = Boolean(newsUrl) && index === lines.length - 1;
         if (linked) {
@@ -52,7 +55,7 @@ function DailyCard({ update, onLinkError, styles }) {
               key={`${update.ticker}-${index}`}
               onPress={() => {
                 Linking.openURL(newsUrl).catch(() => {
-                  onLinkError("Could not open that link.");
+                  onLinkError("Couldn't open that link. Try again.");
                 });
               }}
             >
@@ -77,7 +80,7 @@ function FilingCard({ filing, outlook, onLinkError, styles }) {
         <Pressable
           onPress={() => {
             Linking.openURL(filing.url).catch(() => {
-              onLinkError("Could not open that link.");
+              onLinkError("Couldn't open that link. Try again.");
             });
           }}
         >
@@ -98,6 +101,7 @@ export default function UpdatesFeed({
   helpers,
   styles,
   onLinkError,
+  emptyAction,
 }) {
   const feed = updatesFeed({ updates, alerts, hasLikes, digest, filings });
   const filingNotes = filingHelpers(feed.filings);
@@ -124,7 +128,20 @@ export default function UpdatesFeed({
           ))}
         </View>
       ) : null}
-      {feed.emptyText ? <Text style={styles.row}>{feed.emptyText}</Text> : null}
+      {feed.emptyText ? (
+        <View style={styles.state}>
+          <Text style={styles.body}>{feed.emptyText}</Text>
+          {emptyAction ? (
+            <Pressable
+              style={[styles.actionBtn, styles.primaryBtn]}
+              onPress={emptyAction.onPress}
+              accessibilityRole="button"
+            >
+              <Text style={styles.primaryBtnText}>{emptyAction.label}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {feed.filings.length > 0 ? (
         <View>
           <Text style={styles.sectionLabel}>SEC filings</Text>

@@ -1,6 +1,7 @@
 import {
   FILING_LINK_LABEL,
   alertKindLabel,
+  companyHeading,
   filingHelpers,
   helperForAlert,
   newsAlertUrl,
@@ -11,13 +12,14 @@ function AlertCard({ alert, helper }) {
   const url = newsAlertUrl(alert);
   const line = typeof alert.line === "string" ? alert.line : "";
   const unseen = alert.seen !== true;
+  const heading = companyHeading(alert);
   return (
     <article className="card alert">
       <p className="alert-label">
         Alert · {alertKindLabel(alert.kind)}
         {unseen ? " · New" : ""}
       </p>
-      <p className="row">{alert.ticker}</p>
+      {heading ? <p className="row">{heading}</p> : null}
       {url ? (
         <p className={unseen ? "row unseen" : "row"}>
           <a href={url} target="_blank" rel="noopener noreferrer">{line}</a>
@@ -33,9 +35,10 @@ function AlertCard({ alert, helper }) {
 function DailyCard({ update }) {
   const lines = Array.isArray(update.lines) ? update.lines : [];
   const newsUrl = typeof update.news_url === "string" && update.news_url ? update.news_url : null;
+  const heading = companyHeading(update);
   return (
     <article className="card">
-      <h3>{update.ticker}</h3>
+      {heading ? <h3>{heading}</h3> : null}
       {lines.map((line, index) => {
         const linked = Boolean(newsUrl) && index === lines.length - 1;
         if (linked) {
@@ -56,7 +59,7 @@ function DailyCard({ update }) {
 function FilingCard({ filing, outlook }) {
   return (
     <article className="card">
-      {filing.name ? <p className="row">{filing.name}</p> : null}
+      {filing.name ? <h3>{filing.name}</h3> : null}
       <p className="row">{filing.line}</p>
       {filing.url ? (
         <p className="row">
@@ -68,7 +71,7 @@ function FilingCard({ filing, outlook }) {
   );
 }
 
-export default function UpdatesFeed({ updates, alerts, hasLikes, digest, filings, helpers }) {
+export default function UpdatesFeed({ updates, alerts, hasLikes, digest, filings, helpers, emptyAction }) {
   const feed = updatesFeed({ updates, alerts, hasLikes, digest, filings });
   const filingNotes = filingHelpers(feed.filings);
   return (
@@ -92,7 +95,16 @@ export default function UpdatesFeed({ updates, alerts, hasLikes, digest, filings
           ))}
         </div>
       ) : null}
-      {feed.emptyText ? <p>{feed.emptyText}</p> : null}
+      {feed.emptyText ? (
+        <div className="state">
+          <p>{feed.emptyText}</p>
+          {emptyAction ? (
+            <button type="button" className="primary" onClick={emptyAction.onClick}>
+              {emptyAction.label}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {feed.filings.length > 0 ? (
         <div>
           <h3>SEC filings</h3>

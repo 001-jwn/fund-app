@@ -23,12 +23,26 @@ import {
   updatesFeed,
   updatesFrom,
   updatesNavLabel,
+  alertKindLabel,
+  companyHeading,
+  companyLabel,
 } from "./alertView.js";
 
 test("the website and iPhone copies of alertView stay the same", () => {
   const web = fs.readFileSync(new URL("./alertView.js", import.meta.url), "utf8");
   const phone = fs.readFileSync(new URL("../../mobile/alertView.js", import.meta.url), "utf8");
   assert.equal(web, phone);
+});
+
+test("an earnings alert is labeled Results and names keep the ticker", () => {
+  assert.equal(alertKindLabel("earnings"), "Results");
+  assert.equal(alertKindLabel("price"), "Price");
+  assert.equal(alertKindLabel("news"), "News");
+  assert.equal(companyLabel({ short_name: "Unity", ticker: "U" }), "Unity (U)");
+  assert.equal(companyHeading({ short_name: "Unity", ticker: "U" }), "Unity (U)");
+  assert.equal(companyLabel({ company_name: "Unity Software Inc.", ticker: "U" }), "Unity Software Inc. (U)");
+  assert.equal(companyHeading({ ticker: "U" }), "");
+  assert.equal(companyLabel({ ticker: "U" }), "U");
 });
 
 test("updates nav label hides a zero count", () => {
@@ -339,8 +353,8 @@ test("filings stay in server order with the line and link untouched", () => {
   };
   const rows = filingsFrom(data);
   assert.deepEqual(rows, [
-    { name: "AMD", line: spaced, url: AMD_URL },
-    { name: "NVIDIA", line: NVDA_FILING, url: NVDA_URL },
+    { name: "AMD (AMD)", line: spaced, url: AMD_URL },
+    { name: "NVIDIA (NVDA)", line: NVDA_FILING, url: NVDA_URL },
   ]);
   assert.equal(JSON.stringify(rows).includes("2026-11-01"), false);
   assert.equal(JSON.stringify(rows).includes("2026-11-05"), false);
@@ -367,7 +381,7 @@ test("filings stay in server order with the line and link untouched", () => {
   }), false);
 
   const replaced = filingsFrom({ filings: [filingRow()] });
-  assert.deepEqual(replaced, [{ name: "NVIDIA", line: NVDA_FILING, url: NVDA_URL }]);
+  assert.deepEqual(replaced, [{ name: "NVIDIA (NVDA)", line: NVDA_FILING, url: NVDA_URL }]);
   assert.deepEqual(filingsFrom({}), []);
 });
 
@@ -385,10 +399,10 @@ test("only an https filing url becomes a link", () => {
     ],
   });
   assert.deepEqual(rows, [
-    { name: "NVIDIA", line: httpsLine, url: NVDA_URL },
-    { name: "AMD", line: httpLine, url: "" },
-    { name: "Sony", line: scriptLine, url: "" },
-    { name: "Roblox", line: missingLine, url: "" },
+    { name: "NVIDIA (NVDA)", line: httpsLine, url: NVDA_URL },
+    { name: "AMD (AMD)", line: httpLine, url: "" },
+    { name: "Sony (SONY)", line: scriptLine, url: "" },
+    { name: "Roblox (RBLX)", line: missingLine, url: "" },
   ]);
   assert.equal(
     filingsFrom({
@@ -414,7 +428,7 @@ test("a filing with no short name uses the ticker and still keeps a missing link
     [
       { name: "NVDA", line: NVDA_FILING, url: NVDA_URL },
       { name: "AMD", line: AMD_FILING, url: "" },
-      { name: "Sony", line: SONY_LINE, url: "" },
+      { name: "Sony (SONY)", line: SONY_LINE, url: "" },
     ]
   );
 });
@@ -437,7 +451,7 @@ test("missing, null, empty, and malformed filings add no section", () => {
         { ticker: "SONY", short_name: "Sony", line: SONY_LINE, filing_url: AMD_URL, date_ny: "2026-11-02" },
       ],
     }),
-    [{ name: "Sony", line: SONY_LINE, url: AMD_URL }]
+    [{ name: "Sony (SONY)", line: SONY_LINE, url: AMD_URL }]
   );
 
   const quietSection = digestSectionFrom(digestPayload([], QUIET), true);

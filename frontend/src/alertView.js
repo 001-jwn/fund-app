@@ -21,9 +21,29 @@ export const FILING_LINK_LABEL = "Read the filing";
 
 const KIND_LABELS = {
   price: "Price",
-  earnings: "Earnings",
+  earnings: "Results",
   news: "News",
 };
+
+export function companyLabel(row) {
+  if (!row || typeof row !== "object") return "";
+  const ticker = typeof row.ticker === "string" ? row.ticker.trim() : "";
+  let name = "";
+  if (typeof row.short_name === "string" && row.short_name.trim()) name = row.short_name.trim();
+  else if (typeof row.company_name === "string" && row.company_name.trim()) name = row.company_name.trim();
+  if (name && ticker) return `${name} (${ticker})`;
+  if (name) return name;
+  return ticker;
+}
+
+// A lone ticker is not a heading. Alerts and daily rows use this when a
+// short name (or full name) is present.
+export function companyHeading(row) {
+  const label = companyLabel(row);
+  const ticker = row && typeof row.ticker === "string" ? row.ticker.trim() : "";
+  if (!label || label === ticker) return "";
+  return label;
+}
 
 export function updatesFrom(data) {
   if (!data || !Array.isArray(data.updates)) return [];
@@ -88,12 +108,7 @@ export function filingsFrom(data) {
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     if (typeof item.line !== "string") continue;
-    let name = "";
-    if (typeof item.short_name === "string" && item.short_name.length > 0) {
-      name = item.short_name;
-    } else if (typeof item.ticker === "string") {
-      name = item.ticker;
-    }
+    const name = companyLabel(item);
     const url = filingLink(item.filing_url);
     rows.push({ name, line: item.line, url });
   }

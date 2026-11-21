@@ -232,13 +232,15 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
       name: "alert only",
       props: {
         updates: [],
-        alerts: [{ id: 1, ticker: "RBLX", kind: "price", line: ALERT_LINE, seen: false }],
+        alerts: [{ id: 1, ticker: "RBLX", short_name: "Roblox", kind: "price", line: ALERT_LINE, seen: false }],
         hasLikes: true,
         digest: quietDigest,
         helpers: { price: true, earnings: false },
       },
       check(lines) {
         assert.equal(lines.includes("Alerts"), true);
+        assert.equal(lines.includes("Roblox (RBLX)"), true);
+        assert.equal(lines.includes("RBLX"), false);
         assert.equal(lines.includes(ALERT_LINE), true);
         assert.equal(lines.includes(QUIET), true);
         assert.equal(lines.includes("Daily updates"), false);
@@ -248,7 +250,7 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
     {
       name: "daily only",
       props: {
-        updates: [{ ticker: "RBLX", lines: [RBLX_LINE], news_url: null }],
+        updates: [{ ticker: "RBLX", short_name: "Roblox", lines: [RBLX_LINE], news_url: null }],
         alerts: [],
         hasLikes: true,
         digest: quietDigest,
@@ -257,6 +259,7 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
       check(lines) {
         assert.equal(lines.includes(QUIET), true);
         assert.equal(lines.includes("Daily updates"), true);
+        assert.equal(lines.includes("Roblox (RBLX)"), true);
         assert.equal(lines.includes(RBLX_LINE), true);
         assert.equal(lines.includes("Alerts"), false);
         assert.equal(lines.includes(NO_NEWS_COPY), false);
@@ -295,8 +298,8 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
           lines.filter((line) => (
             line === "SEC filings"
             || line === SEC_FILING_HELPER
-            || line === "AMD"
-            || line === "NVIDIA"
+            || line === "AMD (AMD)"
+            || line === "NVIDIA (NVDA)"
             || line === AMD_FILING
             || line === NVDA_FILING
             || line === FILING_LINK_LABEL
@@ -305,10 +308,10 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
           [
             "SEC filings",
             SEC_FILING_HELPER,
-            "AMD",
+            "AMD (AMD)",
             AMD_FILING,
             FILING_LINK_LABEL,
-            "NVIDIA",
+            "NVIDIA (NVDA)",
             NVDA_FILING,
             FILING_LINK_LABEL,
           ]
@@ -406,7 +409,7 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
       },
       check(lines) {
         assert.equal(lines.includes("SEC filings"), true);
-        assert.equal(lines.includes("NVIDIA"), true);
+        assert.equal(lines.includes("NVIDIA (NVDA)"), true);
         assert.equal(lines.includes(NVDA_FILING), true);
         assert.equal(lines.includes(FILING_LINK_LABEL), false);
         assert.equal(lines.includes(SEC_FILING_HELPER), true);
@@ -506,7 +509,7 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
         assert.equal(lines.filter((line) => line === OUTLOOK_HELPER).length, 1);
         assert.equal(lines.filter((line) => line === FILING_LINK_LABEL).length, 3);
         assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
-        assert.ok(lines.indexOf(SEC_FILING_HELPER) < lines.indexOf("Sony"));
+        assert.ok(lines.indexOf(SEC_FILING_HELPER) < lines.indexOf("Sony (SONY)"));
         assert.ok(lines.indexOf(earlier) < lines.indexOf(OUTLOOK_HELPER));
         assert.ok(lines.indexOf(OUTLOOK_HELPER) < lines.indexOf(later));
         assert.equal(lines.includes("Daily updates"), false);

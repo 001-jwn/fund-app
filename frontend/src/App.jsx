@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   alertsFrom,
   claimHelperFlags,
+  companyLabel,
   digestSectionFrom,
   unseenCountFrom,
   updatesFrom,
@@ -19,9 +20,21 @@ import {
   onboard,
   unlikeCompany,
 } from "./api";
-import { becauseLikedText, nextQueueAfterLike, priceLine } from "./cardText";
+import {
+  LIVE_DATA_BANNER,
+  becauseLikedText,
+  nextQueueAfterLike,
+  priceLine,
+  showLiveDataBanner,
+} from "./cardText";
 
 const USER_KEY = "fund_user_id";
+const SESSION_MISSING = "We couldn't find your saved picks. Please choose your interests again.";
+const LOAD_ERROR = {
+  swipe: "Couldn't load companies. Try again.",
+  matches: "Couldn't load your matches. Try again.",
+  updates: "Couldn't load your updates. Try again.",
+};
 
 const INTERESTS = [
   { id: "gaming", label: "Gaming" },
@@ -30,12 +43,17 @@ const INTERESTS = [
   { id: "automobile", label: "Automobile" },
 ];
 
+function loadErrorMessage(screenName, err) {
+  if (err && (err.network || err.specific) && err.message) return err.message;
+  return LOAD_ERROR[screenName] || LOAD_ERROR.updates;
+}
+
 function newsBlock(card) {
   if (card.news_status === "none") {
     return <p className="row">{card.news_message || "No recent news about this company yet."}</p>;
   }
   if (!card.news_available || !card.latest_news_headline) {
-    return <p className="row"><b>Latest news:</b> unavailable</p>;
+    return <p className="row"><b>Latest news:</b> not available</p>;
   }
   return (
     <div className="row">
@@ -61,6 +79,40 @@ function BecauseLiked({ card }) {
   return <p className="row">{text}</p>;
 }
 
+function Logo({ ticker, url }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [url]);
+  const letter = (typeof ticker === "string" && ticker.trim().charAt(0).toUpperCase()) || "?";
+  if (!url || failed) {
+    return <span className="logo-fallback" aria-hidden="true">{letter}</span>;
+  }
+  return <img className="logo" src={url} alt="" onError={() => setFailed(true)} />;
+}
+
+function CompanyCard({ card, showNews, children }) {
+  const price = priceLine(card);
+  return (
+    <article className="card">
+      <Logo ticker={card.ticker} url={card.logo_url} />
+      <h3>{companyLabel(card)}</h3>
+      <Why line={card.why_line} />
+      <BecauseLiked card={card} />
+      {price ? <p className="row">{price}</p> : null}
+      <p className="row">{card.short_description}</p>
+      {showNews ? <NewsBlock card={card} /> : null}
+      {showNews ? (
+        <p className="row">{card.quarterly_summary || "Latest quarter: not available"}</p>
+      ) : null}
+      {showNews ? (
+        <p className="row">{card.quarter_label || "Last quarter: not available"}</p>
+      ) : null}
+      {children}
+    </article>
+  );
+}
+
 export default function App() {
   const [screen, setScreen] = useState(() =>
     localStorage.getItem(USER_KEY) ? "swipe" : "onboarding"
@@ -77,6 +129,9 @@ export default function App() {
   const [hasLikes, setHasLikes] = useState(null);
   const [helpers, setHelpers] = useState({ price: false, earnings: false });
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [loadErrorScreen, setLoadErrorScreen] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const updatesFetchId = useRef(0);
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
@@ -85,6 +140,18 @@ export default function App() {
   const [finnhub, setFinnhub] = useState("off");
   const [confirmReset, setConfirmReset] = useState(false);
   const [unliking, setUnliking] = useState("");
+
+  function retryLoad() {
+    setLoadError("");
+    setLoadErrorScreen("");
+    setError("");
+    setReloadKey((value) => value + 1);
+  }
+
+  function failLoad(which, err) {
+    setLoadError(loadErrorMessage(which, err));
+    setLoadErrorScreen(which);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +171,8 @@ export default function App() {
     if (screen !== "swipe" || !userId) return undefined;
     let cancelled = false;
     setLoading(true);
+    setLoadError("");
+    setLoadErrorScreen("");
     setError("");
     getCards(userId, 10)
       .then((data) => {
@@ -112,9 +181,9 @@ export default function App() {
       .catch((err) => {
         if (cancelled) return;
         if (err.status === 404) {
-          forgetUser("That session was not found. Pick your interests again.");
+          forgetUser(SESSION_MISSING);
         } else {
-          setError(err.message);
+          failLoad("swipe", err);
         }
       })
       .finally(() => {
@@ -123,12 +192,14 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [screen, userId]);
+  }, [screen, userId, reloadKey]);
 
   useEffect(() => {
     if (screen !== "matches" || !userId) return undefined;
     let cancelled = false;
     setLoading(true);
+    setLoadError("");
+    setLoadErrorScreen("");
     setError("");
     getMatches(userId)
       .then((data) => {
@@ -137,9 +208,9 @@ export default function App() {
       .catch((err) => {
         if (cancelled) return;
         if (err.status === 404) {
-          forgetUser("That session was not found. Pick your interests again.");
+          forgetUser(SESSION_MISSING);
         } else {
-          setError(err.message);
+          failLoad("matches", err);
         }
       })
       .finally(() => {
@@ -148,7 +219,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [screen, userId]);
+  }, [screen, userId, reloadKey]);
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -162,7 +233,7 @@ export default function App() {
       .catch((err) => {
         if (cancelled || fetchId !== updatesFetchId.current || userIdRef.current !== userId) return;
         if (err.status === 404) {
-          forgetUser("That session was not found. Pick your interests again.");
+          forgetUser(SESSION_MISSING);
         }
       });
     return () => {
@@ -176,6 +247,8 @@ export default function App() {
     let cancelled = false;
     const latest = () => fetchId === updatesFetchId.current && userIdRef.current === userId;
     setLoading(true);
+    setLoadError("");
+    setLoadErrorScreen("");
     setError("");
     (async () => {
       try {
@@ -194,10 +267,11 @@ export default function App() {
           } catch (err) {
             if (!latest()) return;
             if (err.status === 404) {
-              forgetUser("That session was not found. Pick your interests again.");
+              forgetUser(SESSION_MISSING);
               return;
             }
-            setError(err.message);
+            failLoad("updates", err);
+            return;
           }
         }
         let nextHelpers = { price: false, earnings: false };
@@ -220,18 +294,18 @@ export default function App() {
           } catch (err) {
             if (!latest()) return;
             if (err.status === 404) {
-              forgetUser("That session was not found. Pick your interests again.");
+              forgetUser(SESSION_MISSING);
               return;
             }
-            setError(err.message || "Could not mark alerts as seen.");
+            setError(err.message || "Couldn't update your alerts. Try again.");
           }
         }
       } catch (err) {
         if (!latest()) return;
         if (err.status === 404) {
-          forgetUser("That session was not found. Pick your interests again.");
+          forgetUser(SESSION_MISSING);
         } else {
-          setError(err.message);
+          failLoad("updates", err);
         }
       } finally {
         if (!cancelled && latest()) setLoading(false);
@@ -240,7 +314,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [screen, userId]);
+  }, [screen, userId, reloadKey]);
 
   const current = queue[0];
 
@@ -274,6 +348,8 @@ export default function App() {
     setHasLikes(null);
     setHelpers({ price: false, earnings: false });
     setLoading(false);
+    setLoadError("");
+    setLoadErrorScreen("");
     setPicked([]);
     setConfirmReset(false);
     setScreen("onboarding");
@@ -288,7 +364,7 @@ export default function App() {
       await unlikeCompany(userId, ticker);
       setMatches((prev) => prev.filter((match) => match.ticker !== ticker));
     } catch (err) {
-      setError(err.message || "Could not unlike that company.");
+      setError(err.message || "Couldn't remove that company. Try again.");
     } finally {
       setUnliking("");
     }
@@ -359,38 +435,60 @@ export default function App() {
     }
   }
 
+  const showBanner = showLiveDataBanner({ screen, card: current, matches });
+  const screenLoadError = loadErrorScreen === screen ? loadError : "";
+
   return (
     <main>
       <h1>fun(d)</h1>
-      <p>Swipe stocks that match what you already care about.</p>
+      <p className="tagline">better information, simply</p>
+      <p className="subtitle">Swipe stocks that match what you already care about.</p>
 
       {userId ? (
         <nav>
-          <button type="button" onClick={() => setScreen("swipe")}>Swipe</button>
-          <button type="button" onClick={() => setScreen("matches")}>Matches</button>
-          <button type="button" onClick={() => setScreen("updates")}>{updatesNavLabel(unseenCount)}</button>
-          {confirmReset ? (
-            <div>
-              <p>Start over? This clears your interests and likes.</p>
-              <button type="button" onClick={() => forgetUser("")}>Start over</button>
-              <button type="button" onClick={() => setConfirmReset(false)}>Cancel</button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => setConfirmReset(true)}>Start over</button>
-          )}
+          <button
+            type="button"
+            className={screen === "swipe" ? "active" : ""}
+            onClick={() => setScreen("swipe")}
+          >
+            Swipe
+          </button>
+          <button
+            type="button"
+            className={screen === "matches" ? "active" : ""}
+            onClick={() => setScreen("matches")}
+          >
+            Matches
+          </button>
+          <button
+            type="button"
+            className={screen === "updates" ? "active" : ""}
+            onClick={() => setScreen("updates")}
+          >
+            {updatesNavLabel(unseenCount)}
+          </button>
+          <button type="button" onClick={() => setConfirmReset(true)}>Start over</button>
         </nav>
       ) : null}
 
-      {finnhub === "off" && screen !== "onboarding" ? (
-        <p className="row">Live price and news are unavailable until a Finnhub key is added.</p>
+      {confirmReset ? (
+        <div className="confirm">
+          <p>Start over? This clears your interests and likes.</p>
+          <div className="actions">
+            <button type="button" className="primary" onClick={() => forgetUser("")}>Start over</button>
+            <button type="button" onClick={() => setConfirmReset(false)}>Cancel</button>
+          </div>
+        </div>
       ) : null}
+
+      {showBanner ? <p className="banner">{LIVE_DATA_BANNER}</p> : null}
 
       {error ? <p className="error">{error}</p> : null}
 
       {screen === "onboarding" ? (
         <section>
           <h2>What are you into?</h2>
-          <p>Pick one or more. You can change this later with Start over.</p>
+          <p>Pick one or more. You can change this later by starting over.</p>
           {INTERESTS.map((interest) => (
             <label key={interest.id}>
               <input
@@ -401,7 +499,7 @@ export default function App() {
               {interest.label}
             </label>
           ))}
-          <button type="button" onClick={start} disabled={busy}>
+          <button type="button" className="primary" onClick={start} disabled={busy}>
             Start
           </button>
         </section>
@@ -410,32 +508,33 @@ export default function App() {
       {screen === "swipe" ? (
         <section>
           <h2>Swipe</h2>
-          {loading && !current ? <p>Loading a company...</p> : null}
-          {!loading && !current ? (
-            <p>No more companies for your interests. Open Matches, or start over and pick different interests.</p>
+          {loading && !current ? <p>Loading companies...</p> : null}
+          {!loading && screenLoadError ? (
+            <div className="state">
+              <p>{screenLoadError}</p>
+              <button type="button" className="primary" onClick={retryLoad}>Try again</button>
+            </div>
           ) : null}
-          {current ? (
-            <article className="card">
-              {current.logo_url ? (
-                <img className="logo" src={current.logo_url} alt="" />
-              ) : null}
-              <h3>
-                {current.company_name} ({current.ticker})
-              </h3>
-              <Why line={current.why_line} />
-              <BecauseLiked card={current} />
-              <p className="row">{priceLine(current)}</p>
-              <p className="row">{current.short_description}</p>
-              {newsBlock(current)}
-              <p className="row">{current.quarterly_summary || "Latest quarter: unavailable"}</p>
-              <p className="row">{current.quarter_label || "Last quarter: unavailable"}</p>
-              <button type="button" onClick={() => swipe("like")} disabled={busy}>
-                Like
-              </button>
-              <button type="button" onClick={() => swipe("dislike")} disabled={busy}>
-                Dislike
-              </button>
-            </article>
+          {!loading && !screenLoadError && !current ? (
+            <div className="state">
+              <p>No more companies right now for the interests you picked. Open Matches, or start over to pick different ones.</p>
+              <div className="actions">
+                <button type="button" className="primary" onClick={() => setScreen("matches")}>Open Matches</button>
+                <button type="button" onClick={() => setConfirmReset(true)}>Start over</button>
+              </div>
+            </div>
+          ) : null}
+          {current && !screenLoadError ? (
+            <CompanyCard card={current} showNews>
+              <div className="actions">
+                <button type="button" className="primary" onClick={() => swipe("like")} disabled={busy}>
+                  Like
+                </button>
+                <button type="button" onClick={() => swipe("dislike")} disabled={busy}>
+                  Pass
+                </button>
+              </div>
+            </CompanyCard>
           ) : null}
         </section>
       ) : null}
@@ -444,27 +543,29 @@ export default function App() {
         <section>
           <h2>Matches</h2>
           {loading ? <p>Loading matches...</p> : null}
-          {!loading && matches.length === 0 ? (
-            <p>No matches yet. Tap Like on a company you'd like to follow and it'll show up here.</p>
+          {!loading && screenLoadError ? (
+            <div className="state">
+              <p>{screenLoadError}</p>
+              <button type="button" className="primary" onClick={retryLoad}>Try again</button>
+            </div>
           ) : null}
-          {matches.map((match) => (
-            <article className="card" key={match.ticker}>
-              <h3>
-                {match.company_name} ({match.ticker})
-              </h3>
-              <Why line={match.why_line} />
-              <BecauseLiked card={match} />
-              <p className="row">{priceLine(match)}</p>
-              <p className="row">{match.short_description}</p>
+          {!loading && !screenLoadError && matches.length === 0 ? (
+            <div className="state">
+              <p>No matches yet. Swipe right or press Like to save a company here.</p>
+              <button type="button" className="primary" onClick={() => setScreen("swipe")}>Start swiping</button>
+            </div>
+          ) : null}
+          {!screenLoadError ? matches.map((match) => (
+            <CompanyCard card={match} showNews={false} key={match.ticker}>
               <button
                 type="button"
                 onClick={() => unlikeMatch(match.ticker)}
                 disabled={unliking === match.ticker}
               >
-                Unlike
+                Remove
               </button>
-            </article>
-          ))}
+            </CompanyCard>
+          )) : null}
         </section>
       ) : null}
 
@@ -472,7 +573,13 @@ export default function App() {
         <section>
           <h2>Updates</h2>
           {loading ? <p>Loading updates...</p> : null}
-          {!loading ? (
+          {!loading && screenLoadError ? (
+            <div className="state">
+              <p>{screenLoadError}</p>
+              <button type="button" className="primary" onClick={retryLoad}>Try again</button>
+            </div>
+          ) : null}
+          {!loading && !screenLoadError ? (
             <UpdatesFeed
               updates={updates}
               alerts={alerts}
@@ -480,6 +587,7 @@ export default function App() {
               digest={digest}
               filings={filings}
               helpers={helpers}
+              emptyAction={{ label: "Start swiping", onClick: () => setScreen("swipe") }}
             />
           ) : null}
         </section>
