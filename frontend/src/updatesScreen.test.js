@@ -298,7 +298,7 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
           lines.filter((line) => (
             line === "SEC filings"
             || line === SEC_FILING_HELPER
-            || line === "AMD (AMD)"
+            || line === "AMD"
             || line === "NVIDIA (NVDA)"
             || line === AMD_FILING
             || line === NVDA_FILING
@@ -308,7 +308,7 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
           [
             "SEC filings",
             SEC_FILING_HELPER,
-            "AMD (AMD)",
+            "AMD",
             AMD_FILING,
             FILING_LINK_LABEL,
             "NVIDIA (NVDA)",
@@ -509,7 +509,7 @@ test("website and iPhone Updates feeds render the same quiet, empty, and mixed s
         assert.equal(lines.filter((line) => line === OUTLOOK_HELPER).length, 1);
         assert.equal(lines.filter((line) => line === FILING_LINK_LABEL).length, 3);
         assert.equal(lines.indexOf(SEC_FILING_HELPER), lines.indexOf("SEC filings") + 1);
-        assert.ok(lines.indexOf(SEC_FILING_HELPER) < lines.indexOf("Sony (SONY)"));
+        assert.ok(lines.indexOf(SEC_FILING_HELPER) < lines.indexOf("Sony"));
         assert.ok(lines.indexOf(earlier) < lines.indexOf(OUTLOOK_HELPER));
         assert.ok(lines.indexOf(OUTLOOK_HELPER) < lines.indexOf(later));
         assert.equal(lines.includes("Daily updates"), false);

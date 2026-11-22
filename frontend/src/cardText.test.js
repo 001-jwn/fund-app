@@ -69,12 +69,24 @@ test("the price line says up, down, or about flat at the same threshold", () => 
   assert.equal(priceLine(card()).includes("change"), false);
 });
 
-test("a missing price, a non-positive price, or a non-finite percent is not available", () => {
+test("a missing or non-positive price is left off the card", () => {
+  assert.equal(priceLine(card({ current_price: null })), "");
+  assert.equal(priceLine(card({ current_price: undefined })), "");
+  assert.equal(priceLine(card({ current_price: 0 })), "");
+  assert.equal(priceLine(card({ current_price: -5 })), "");
+  assert.equal(priceLine(card({ current_price: null, price_available: false })), "");
+  for (const line of [
+    priceLine(card({ current_price: null })),
+    priceLine(card({ current_price: 0 })),
+    priceLine(card({ current_price: -1 })),
+  ]) {
+    assert.equal(line.includes("Price:"), false);
+    assert.equal(line.includes(PRICE_UNAVAILABLE), false);
+  }
+});
+
+test("a non-finite percent still says the price is not available", () => {
   assert.equal(PRICE_UNAVAILABLE, "Price: not available");
-  assert.equal(priceLine(card({ current_price: null })), PRICE_UNAVAILABLE);
-  assert.equal(priceLine(card({ current_price: undefined })), PRICE_UNAVAILABLE);
-  assert.equal(priceLine(card({ current_price: 0 })), PRICE_UNAVAILABLE);
-  assert.equal(priceLine(card({ current_price: -5 })), PRICE_UNAVAILABLE);
   assert.equal(priceLine(card({ price_change_percent: null })), PRICE_UNAVAILABLE);
   assert.equal(priceLine(card({ price_change_percent: Number.NaN })), PRICE_UNAVAILABLE);
   assert.equal(priceLine(card({ price_change_percent: Number.POSITIVE_INFINITY })), PRICE_UNAVAILABLE);

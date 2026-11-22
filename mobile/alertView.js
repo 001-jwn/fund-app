@@ -25,23 +25,32 @@ const KIND_LABELS = {
   news: "News",
 };
 
+function trimmed(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// One name for cards, Matches, Updates, digest rows, and filings.
+// A short name that is the ticker is shown once: "AMD", not "AMD (AMD)".
 export function companyLabel(row) {
   if (!row || typeof row !== "object") return "";
-  const ticker = typeof row.ticker === "string" ? row.ticker.trim() : "";
-  let name = "";
-  if (typeof row.short_name === "string" && row.short_name.trim()) name = row.short_name.trim();
-  else if (typeof row.company_name === "string" && row.company_name.trim()) name = row.company_name.trim();
+  const ticker = trimmed(row.ticker);
+  const shortName = trimmed(row.short_name);
+  const companyName = trimmed(row.company_name);
+  if (shortName && ticker && shortName.toLowerCase() === ticker.toLowerCase()) return shortName;
+  const name = shortName || companyName;
   if (name && ticker) return `${name} (${ticker})`;
   if (name) return name;
   return ticker;
 }
 
-// A lone ticker is not a heading. Alerts and daily rows use this when a
-// short name (or full name) is present.
+// A lone ticker is not a heading. A short name that matches the ticker still is.
 export function companyHeading(row) {
   const label = companyLabel(row);
-  const ticker = row && typeof row.ticker === "string" ? row.ticker.trim() : "";
-  if (!label || label === ticker) return "";
+  if (!label || !row || typeof row !== "object") return "";
+  const ticker = trimmed(row.ticker);
+  const shortName = trimmed(row.short_name);
+  const companyName = trimmed(row.company_name);
+  if (!shortName && !companyName && label.toLowerCase() === ticker.toLowerCase()) return "";
   return label;
 }
 

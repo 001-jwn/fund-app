@@ -109,10 +109,11 @@ function quoteDateUsable(value) {
 
 export function priceLine(card) {
   if (!card || typeof card !== "object") return PRICE_UNAVAILABLE;
-  if (card.price_available === false) return PRICE_UNAVAILABLE;
   const price = priceNumber(card.current_price);
+  if (price === null || price <= 0) return "";
+  if (card.price_available === false) return PRICE_UNAVAILABLE;
   const pct = percentNumber(card.price_change_percent);
-  if (price === null || price <= 0 || pct === null) return PRICE_UNAVAILABLE;
+  if (pct === null) return PRICE_UNAVAILABLE;
   if (quoteDateBlocks(card)) return "";
   const money = `US$${price.toFixed(2)}`;
   const rounded = roundHalfUpOneDecimal(pct);

@@ -48,7 +48,7 @@ function loadErrorMessage(screenName, err) {
   return LOAD_ERROR[screenName] || LOAD_ERROR.updates;
 }
 
-function newsBlock(card) {
+function NewsBlock({ card }) {
   if (card.news_status === "none") {
     return <p className="row">{card.news_message || "No recent news about this company yet."}</p>;
   }
@@ -91,7 +91,7 @@ function Logo({ ticker, url }) {
   return <img className="logo" src={url} alt="" onError={() => setFailed(true)} />;
 }
 
-function CompanyCard({ card, showNews, children }) {
+export function CompanyCard({ card, showNews, children }) {
   const price = priceLine(card);
   return (
     <article className="card">
