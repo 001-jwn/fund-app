@@ -18,7 +18,7 @@ from app.models import (
     User,
     UserInterest,
 )
-from app.schemas import SwipeIn, SwipeOut
+from app.schemas import API_ERROR_RESPONSES, SwipeIn, SwipeOut
 
 router = APIRouter()
 
@@ -60,7 +60,7 @@ def _require_user_interest(db: Session, user_id: str, ticker: str) -> None:
         raise HTTPException(status_code=400, detail=OUTSIDE_INTERESTS)
 
 
-@router.post("/like", response_model=SwipeOut)
+@router.post("/like", response_model=SwipeOut, responses=API_ERROR_RESPONSES)
 def like(body: SwipeIn, db: Session = Depends(get_db)) -> SwipeOut:
     _user, _company, ticker = _user_and_company(db, body.user_id, body.ticker)
 
@@ -75,7 +75,7 @@ def like(body: SwipeIn, db: Session = Depends(get_db)) -> SwipeOut:
     return SwipeOut(ok=True, user_id=body.user_id, ticker=ticker, matched=True)
 
 
-@router.post("/dislike", response_model=SwipeOut)
+@router.post("/dislike", response_model=SwipeOut, responses=API_ERROR_RESPONSES)
 def dislike(body: SwipeIn, db: Session = Depends(get_db)) -> SwipeOut:
     _user, _company, ticker = _user_and_company(db, body.user_id, body.ticker)
 
@@ -91,7 +91,7 @@ def dislike(body: SwipeIn, db: Session = Depends(get_db)) -> SwipeOut:
     return SwipeOut(ok=True, user_id=body.user_id, ticker=ticker, matched=False)
 
 
-@router.post("/unlike", response_model=SwipeOut)
+@router.post("/unlike", response_model=SwipeOut, responses=API_ERROR_RESPONSES)
 def unlike(body: SwipeIn, db: Session = Depends(get_db)) -> SwipeOut:
     _user, _company, ticker = _known_user_and_company(db, body.user_id, body.ticker)
 

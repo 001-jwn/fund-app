@@ -603,8 +603,10 @@ def test_ttwo_072175_reiterated_net_bookings_shows_earnings():
     assert decision["hide_reason"] is None
     assert decision["verified"] is True
     line = _line(decision, name="Take-Two", accepted_at="2026-11-09T21:10:58Z")
-    assert line.startswith("Take-Two shared its quarterly results in an SEC filing on Nov 9.")
-    assert "outlook" not in line.lower()
+    assert line == (
+        "Take-Two shared its quarterly results in an SEC filing on Nov 9. "
+        "The company reported revenue of $1.50 billion."
+    )
 
 
 def test_msft_380280_restated_outlook_stays_hidden():

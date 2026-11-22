@@ -21,7 +21,7 @@ from app import db as dbmod
 from app.db import configure_engine, init_db
 from app.errors import UnhandledErrorMiddleware, register_exception_handlers
 from app.routers import alerts, cards, matches, onboarding, swipes, updates
-from app.schemas import HealthOut
+from app.schemas import API_SERVER_RESPONSES, HealthOut
 from app.services.live import finnhub_mode_label, start_refresher, stop_refresher
 
 # backend/app/main.py -> repository root
@@ -75,7 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(updates.router)
     app.include_router(alerts.router)
 
-    @app.get("/health", response_model=HealthOut)
+    @app.get("/health", response_model=HealthOut, responses=API_SERVER_RESPONSES)
     def health() -> HealthOut:
         return HealthOut(status="ok", finnhub=finnhub_mode_label())
 

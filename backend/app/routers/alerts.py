@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.errors import USER_NOT_FOUND
 from app.models import Alert, User
-from app.schemas import AlertsSeenIn, AlertsSeenOut
+from app.schemas import API_ERROR_RESPONSES, AlertsSeenIn, AlertsSeenOut
 
 router = APIRouter()
 
 
-@router.post("/alerts/seen", response_model=AlertsSeenOut)
+@router.post("/alerts/seen", response_model=AlertsSeenOut, responses=API_ERROR_RESPONSES)
 def mark_alerts_seen(body: AlertsSeenIn, db: Session = Depends(get_db)) -> AlertsSeenOut:
     user = db.get(User, body.user_id)
     if user is None:

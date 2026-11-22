@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.errors import USER_NOT_FOUND
 from app.models import Alert, Company, Match, User
-from app.schemas import AlertOut, FilingOut, UpdateOut, UpdatesOut
+from app.schemas import API_ERROR_RESPONSES, AlertOut, FilingOut, UpdateOut, UpdatesOut
 from app.services.cards import liked_display_name
 from app.services.catalysts import NEW_YORK, detect_for_user, earnings_alert_is_current
 from app.services.digest import build_digest
@@ -25,7 +25,7 @@ ALERT_CAP = 50
 router = APIRouter()
 
 
-@router.get("/updates", response_model=UpdatesOut)
+@router.get("/updates", response_model=UpdatesOut, responses=API_ERROR_RESPONSES)
 def get_updates(user_id: str = Query(...), db: Session = Depends(get_db)) -> UpdatesOut:
     user = db.get(User, user_id)
     if user is None:

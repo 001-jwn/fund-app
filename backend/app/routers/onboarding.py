@@ -10,14 +10,14 @@ from app.db import get_db, utcnow
 from app.errors import PICK_ONE_INTEREST, UNKNOWN_INTEREST
 from app.interests import ALLOWED_INTERESTS
 from app.models import User, UserInterest
-from app.schemas import OnboardingIn, OnboardingOut
+from app.schemas import API_VALIDATION_RESPONSES, OnboardingIn, OnboardingOut
 
 router = APIRouter()
 
 ALLOWED = set(ALLOWED_INTERESTS)
 
 
-@router.post("/onboarding", response_model=OnboardingOut)
+@router.post("/onboarding", response_model=OnboardingOut, responses=API_VALIDATION_RESPONSES)
 def onboarding(body: OnboardingIn, db: Session = Depends(get_db)) -> OnboardingOut:
     chosen: list[str] = []
     for raw in body.interests:
