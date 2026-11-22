@@ -5,7 +5,6 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
   Alert,
   Animated,
-  Button,
   Dimensions,
   Image,
   PanResponder,
@@ -18,6 +17,7 @@ import {
 import {
   alertsFrom,
   claimHelperFlags,
+  companyLabel,
   digestSectionFrom,
   unseenCountFrom,
   updatesFrom,
@@ -35,10 +35,34 @@ import {
   onboard,
   unlikeCompany,
 } from "./api";
-import { becauseLikedText, nextQueueAfterLike, priceLine } from "./cardText";
+import {
+  LIVE_DATA_BANNER,
+  becauseLikedText,
+  nextQueueAfterLike,
+  priceLine,
+  showLiveDataBanner,
+} from "./cardText";
 import { SWIPE_DISTANCE_FRACTION, swipeDecision } from "./swipeDecision";
 
 const USER_KEY = "fund_user_id";
+const SESSION_MISSING = "We couldn't find your saved picks. Please choose your interests again.";
+const LOAD_ERROR = {
+  swipe: "Couldn't load companies. Try again.",
+  matches: "Couldn't load your matches. Try again.",
+  updates: "Couldn't load your updates. Try again.",
+};
+
+const ACCENT = "#0b6e56";
+const INK = "#1c1c1c";
+const PAPER = "#f6f5f2";
+const LINE = "#e3e0d8";
+const TYPE = { title: 22, body: 16, caption: 13 };
+const SPACE = { sm: 8, md: 16 };
+
+function loadErrorMessage(screenName, err) {
+  if (err && (err.network || err.specific) && err.message) return err.message;
+  return LOAD_ERROR[screenName] || LOAD_ERROR.updates;
+}
 
 const INTERESTS = [
   { id: "gaming", label: "Gaming" },
@@ -58,7 +82,7 @@ function NewsBlock({ card }) {
   if (!card.news_available || !card.latest_news_headline) {
     return (
       <Text style={styles.row}>
-        <Text style={styles.bold}>Latest news:</Text> unavailable
+        <Text style={styles.bold}>Latest news:</Text> not available
       </Text>
     );
   }
@@ -88,26 +112,46 @@ function BecauseLiked({ card }) {
   return <Text style={styles.row}>{text}</Text>;
 }
 
+function Logo({ ticker, url }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [url]);
+  const letter = (typeof ticker === "string" && ticker.trim().charAt(0).toUpperCase()) || "?";
+  if (!url || failed) {
+    return (
+      <View style={styles.logoFallback}>
+        <Text style={styles.logoLetter}>{letter}</Text>
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri: url }}
+      style={styles.logo}
+      resizeMode="contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function CompanyFacts({ card, showNews }) {
   // holder_count is omitted by the API and stays off the card, same as the website.
+  const price = priceLine(card);
   return (
     <View>
-      {card.logo_url ? (
-        <Image source={{ uri: card.logo_url }} style={styles.logo} resizeMode="contain" />
-      ) : null}
-      <Text style={styles.company}>
-        {card.company_name} ({card.ticker})
-      </Text>
+      <Logo ticker={card.ticker} url={card.logo_url} />
+      <Text style={styles.company}>{companyLabel(card)}</Text>
       <Why line={card.why_line} />
       <BecauseLiked card={card} />
-      <Text style={styles.row}>{priceLine(card)}</Text>
+      {price ? <Text style={styles.row}>{price}</Text> : null}
       <Text style={styles.row}>{card.short_description}</Text>
       {showNews ? <NewsBlock card={card} /> : null}
       {showNews ? (
-        <Text style={styles.row}>{card.quarterly_summary || "Latest quarter: unavailable"}</Text>
+        <Text style={styles.row}>{card.quarterly_summary || "Latest quarter: not available"}</Text>
       ) : null}
       {showNews ? (
-        <Text style={styles.row}>{card.quarter_label || "Last quarter: unavailable"}</Text>
+        <Text style={styles.row}>{card.quarter_label || "Last quarter: not available"}</Text>
       ) : null}
     </View>
   );
@@ -268,6 +312,9 @@ export default function App() {
   const [hasLikes, setHasLikes] = useState(null);
   const [helpers, setHelpers] = useState({ price: false, earnings: false });
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [loadErrorScreen, setLoadErrorScreen] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const updatesFetchId = useRef(0);
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
@@ -278,6 +325,18 @@ export default function App() {
   const [finnhub, setFinnhub] = useState("off");
   const [unliking, setUnliking] = useState("");
   const swipeLock = useRef(false);
+
+  function retryLoad() {
+    setLoadError("");
+    setLoadErrorScreen("");
+    setError("");
+    setReloadKey((value) => value + 1);
+  }
+
+  function failLoad(which, err) {
+    setLoadError(loadErrorMessage(which, err));
+    setLoadErrorScreen(which);
+  }
 
   function setSwipeScrollEnabled(enabled) {
     const view = scrollRef.current;
@@ -300,7 +359,7 @@ export default function App() {
         setScreen("swipe");
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message || "Could not read the saved session.");
+        if (!cancelled) setError(err.message || "Couldn't load your saved picks. You can start again.");
       })
       .finally(() => {
         if (!cancelled) setReady(true);
@@ -333,6 +392,8 @@ export default function App() {
     if (!ready || screen !== "swipe" || !userId) return undefined;
     let cancelled = false;
     setLoading(true);
+    setLoadError("");
+    setLoadErrorScreen("");
     setError("");
     getCards(userId, 10)
       .then((data) => {
@@ -341,9 +402,9 @@ export default function App() {
       .catch((err) => {
         if (cancelled) return;
         if (err.status === 404) {
-          forgetUser("That session was not found. Pick your interests again.");
+          forgetUser(SESSION_MISSING);
         } else {
-          setError(err.message);
+          failLoad("swipe", err);
         }
       })
       .finally(() => {
@@ -352,12 +413,14 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [ready, screen, userId]);
+  }, [ready, screen, userId, reloadKey]);
 
   useEffect(() => {
     if (!ready || screen !== "matches" || !userId) return undefined;
     let cancelled = false;
     setLoading(true);
+    setLoadError("");
+    setLoadErrorScreen("");
     setError("");
     getMatches(userId)
       .then((data) => {
@@ -366,9 +429,9 @@ export default function App() {
       .catch((err) => {
         if (cancelled) return;
         if (err.status === 404) {
-          forgetUser("That session was not found. Pick your interests again.");
+          forgetUser(SESSION_MISSING);
         } else {
-          setError(err.message);
+          failLoad("matches", err);
         }
       })
       .finally(() => {
@@ -377,7 +440,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [ready, screen, userId]);
+  }, [ready, screen, userId, reloadKey]);
 
   useEffect(() => {
     if (!ready || !userId) return undefined;
@@ -391,7 +454,7 @@ export default function App() {
       .catch((err) => {
         if (cancelled || fetchId !== updatesFetchId.current || userIdRef.current !== userId) return;
         if (err.status === 404) {
-          forgetUser("That session was not found. Pick your interests again.");
+          forgetUser(SESSION_MISSING);
         }
       });
     return () => {
@@ -405,6 +468,8 @@ export default function App() {
     let cancelled = false;
     const latest = () => fetchId === updatesFetchId.current && userIdRef.current === userId;
     setLoading(true);
+    setLoadError("");
+    setLoadErrorScreen("");
     setError("");
     (async () => {
       try {
@@ -423,10 +488,11 @@ export default function App() {
           } catch (err) {
             if (!latest()) return;
             if (err.status === 404) {
-              forgetUser("That session was not found. Pick your interests again.");
+              forgetUser(SESSION_MISSING);
               return;
             }
-            setError(err.message);
+            failLoad("updates", err);
+            return;
           }
         }
         let nextHelpers = { price: false, earnings: false };
@@ -449,18 +515,18 @@ export default function App() {
           } catch (err) {
             if (!latest()) return;
             if (err.status === 404) {
-              forgetUser("That session was not found. Pick your interests again.");
+              forgetUser(SESSION_MISSING);
               return;
             }
-            setError(err.message || "Could not mark alerts as seen.");
+            setError(err.message || "Couldn't update your alerts. Try again.");
           }
         }
       } catch (err) {
         if (!latest()) return;
         if (err.status === 404) {
-          forgetUser("That session was not found. Pick your interests again.");
+          forgetUser(SESSION_MISSING);
         } else {
-          setError(err.message);
+          failLoad("updates", err);
         }
       } finally {
         if (!cancelled && latest()) setLoading(false);
@@ -469,7 +535,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [ready, screen, userId]);
+  }, [ready, screen, userId, reloadKey]);
 
   const current = queue[0];
 
@@ -503,6 +569,8 @@ export default function App() {
     setHasLikes(null);
     setHelpers({ price: false, earnings: false });
     setLoading(false);
+    setLoadError("");
+    setLoadErrorScreen("");
     setPicked([]);
     setScreen("onboarding");
     setError(message || "");
@@ -516,7 +584,7 @@ export default function App() {
       await unlikeCompany(userId, ticker);
       setMatches((prev) => prev.filter((match) => match.ticker !== ticker));
     } catch (err) {
-      setError(err.message || "Could not unlike that company.");
+      setError(err.message || "Couldn't remove that company. Try again.");
     } finally {
       setUnliking("");
     }
@@ -597,6 +665,9 @@ export default function App() {
     ]);
   }
 
+  const showBanner = showLiveDataBanner({ screen, card: current, matches });
+  const screenLoadError = loadErrorScreen === screen ? loadError : "";
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen} edges={["top", "bottom", "left", "right"]}>
@@ -607,29 +678,30 @@ export default function App() {
           contentContainerStyle={styles.content}
         >
           <Text style={styles.title}>fun(d)</Text>
-          <Text>Swipe stocks that match what you already care about.</Text>
+          <Text style={styles.tagline}>better information, simply</Text>
+          <Text style={styles.body}>Swipe stocks that match what you already care about.</Text>
 
           {ready && userId ? (
             <View style={styles.nav}>
-              <Button title="Swipe" onPress={() => setScreen("swipe")} />
-              <Button title="Matches" onPress={() => setScreen("matches")} />
-              <Button title={updatesNavLabel(unseenCount)} onPress={() => setScreen("updates")} />
-              <Button title="Start over" onPress={askReset} />
+              <NavButton label="Swipe" selected={screen === "swipe"} onPress={() => setScreen("swipe")} />
+              <NavButton label="Matches" selected={screen === "matches"} onPress={() => setScreen("matches")} />
+              <NavButton
+                label={updatesNavLabel(unseenCount)}
+                selected={screen === "updates"}
+                onPress={() => setScreen("updates")}
+              />
+              <NavButton label="Start over" onPress={askReset} />
             </View>
           ) : null}
 
-          {finnhub === "off" && screen !== "onboarding" ? (
-            <Text style={styles.row}>
-              Live price and news are unavailable until a Finnhub key is added.
-            </Text>
-          ) : null}
+          {showBanner ? <Text style={styles.banner}>{LIVE_DATA_BANNER}</Text> : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           {ready && screen === "onboarding" ? (
             <View>
               <Text style={styles.heading}>What are you into?</Text>
-              <Text>Pick one or more. You can change this later with Start over.</Text>
+              <Text style={styles.body}>Pick one or more. You can change this later by starting over.</Text>
               {INTERESTS.map((interest) => {
                 const selected = picked.includes(interest.id);
                 return (
@@ -645,18 +717,30 @@ export default function App() {
                   </Pressable>
                 );
               })}
-              <Button title="Start" onPress={start} disabled={busy} />
+              <Action label="Start" primary onPress={start} disabled={busy} />
             </View>
           ) : null}
 
           {ready && screen === "swipe" ? (
             <View>
               <Text style={styles.heading}>Swipe</Text>
-              {loading && !current ? <Text>Loading a company...</Text> : null}
-              {!loading && !current ? (
-                <Text>No more companies for your interests. Open Matches, or start over and pick different interests.</Text>
+              {loading && !current ? <Text style={styles.body}>Loading companies...</Text> : null}
+              {!loading && screenLoadError ? (
+                <View style={styles.state}>
+                  <Text style={styles.body}>{screenLoadError}</Text>
+                  <Action label="Try again" primary onPress={retryLoad} />
+                </View>
               ) : null}
-              {current ? (
+              {!loading && !screenLoadError && !current ? (
+                <View style={styles.state}>
+                  <Text style={styles.body}>No more companies right now for the interests you picked. Open Matches, or start over to pick different ones.</Text>
+                    <View style={styles.actions}>
+                    <Action label="Open Matches" primary fill onPress={() => setScreen("matches")} />
+                    <Action label="Start over" fill onPress={askReset} />
+                  </View>
+                </View>
+              ) : null}
+              {current && !screenLoadError ? (
                 <SwipeableCard
                   key={current.ticker}
                   busy={busy}
@@ -666,8 +750,10 @@ export default function App() {
                 >
                   <View style={styles.card}>
                     <CompanyFacts card={current} showNews />
-                    <Button title="Like" onPress={() => swipe("like")} disabled={busy} />
-                    <Button title="Dislike" onPress={() => swipe("dislike")} disabled={busy} />
+                    <View style={styles.actions}>
+                      <Action label="Like" primary fill onPress={() => swipe("like")} disabled={busy} />
+                      <Action label="Pass" fill onPress={() => swipe("dislike")} disabled={busy} />
+                    </View>
                   </View>
                 </SwipeableCard>
               ) : null}
@@ -677,28 +763,43 @@ export default function App() {
           {ready && screen === "matches" ? (
             <View>
               <Text style={styles.heading}>Matches</Text>
-              {loading ? <Text>Loading matches...</Text> : null}
-              {!loading && matches.length === 0 ? (
-                <Text>No matches yet. Tap Like on a company you'd like to follow and it'll show up here.</Text>
+              {loading ? <Text style={styles.body}>Loading matches...</Text> : null}
+              {!loading && screenLoadError ? (
+                <View style={styles.state}>
+                  <Text style={styles.body}>{screenLoadError}</Text>
+                  <Action label="Try again" primary onPress={retryLoad} />
+                </View>
               ) : null}
-              {matches.map((match) => (
+              {!loading && !screenLoadError && matches.length === 0 ? (
+                <View style={styles.state}>
+                  <Text style={styles.body}>No matches yet. Swipe right or press Like to save a company here.</Text>
+                  <Action label="Start swiping" primary onPress={() => setScreen("swipe")} />
+                </View>
+              ) : null}
+              {!screenLoadError ? matches.map((match) => (
                 <View style={styles.card} key={match.ticker}>
                   <CompanyFacts card={match} showNews={false} />
-                  <Button
-                    title="Unlike"
+                  <Action
+                    label="Remove"
                     onPress={() => unlikeMatch(match.ticker)}
                     disabled={unliking === match.ticker}
                   />
                 </View>
-              ))}
+              )) : null}
             </View>
           ) : null}
 
           {ready && screen === "updates" ? (
             <View>
               <Text style={styles.heading}>Updates</Text>
-              {loading ? <Text>Loading updates...</Text> : null}
-              {!loading ? (
+              {loading ? <Text style={styles.body}>Loading updates...</Text> : null}
+              {!loading && screenLoadError ? (
+                <View style={styles.state}>
+                  <Text style={styles.body}>{screenLoadError}</Text>
+                  <Action label="Try again" primary onPress={retryLoad} />
+                </View>
+              ) : null}
+              {!loading && !screenLoadError ? (
                 <UpdatesFeed
                   updates={updates}
                   alerts={alerts}
@@ -708,6 +809,7 @@ export default function App() {
                   helpers={helpers}
                   styles={styles}
                   onLinkError={setError}
+                  emptyAction={{ label: "Start swiping", onPress: () => setScreen("swipe") }}
                 />
               ) : null}
             </View>
@@ -718,85 +820,172 @@ export default function App() {
   );
 }
 
+function NavButton({ label, selected, onPress }) {
+  return (
+    <Pressable
+      style={[styles.navBtn, selected ? styles.navBtnOn : null]}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <Text style={[styles.navBtnText, selected ? styles.navBtnTextOn : null]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function Action({ label, onPress, disabled, primary, fill }) {
+  return (
+    <Pressable
+      style={[
+        styles.actionBtn,
+        fill ? styles.actionFill : null,
+        primary ? styles.primaryBtn : styles.secondaryBtn,
+        disabled ? styles.disabled : null,
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+    >
+      <Text style={primary ? styles.primaryBtnText : styles.secondaryBtnText} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f4f1ea",
+    backgroundColor: PAPER,
   },
   content: {
-    padding: 16,
+    padding: SPACE.md,
     paddingBottom: 32,
   },
   title: {
-    fontSize: 32,
+    fontSize: TYPE.title,
     fontWeight: "700",
-    marginBottom: 4,
+    color: INK,
+  },
+  tagline: {
+    fontSize: TYPE.caption,
+    color: INK,
+    marginTop: SPACE.sm,
+    marginBottom: SPACE.sm,
+  },
+  body: {
+    fontSize: TYPE.body,
+    color: INK,
   },
   heading: {
-    fontSize: 22,
+    fontSize: TYPE.title,
     fontWeight: "700",
-    marginTop: 16,
-    marginBottom: 8,
+    color: INK,
+    marginTop: SPACE.md,
+    marginBottom: SPACE.sm,
   },
   sectionLabel: {
-    fontSize: 18,
+    fontSize: TYPE.title,
     fontWeight: "700",
-    marginTop: 16,
+    color: INK,
+    marginTop: SPACE.md,
   },
   alertCard: {
-    borderWidth: 2,
-    borderStyle: "dashed",
-    borderColor: "#111",
-    backgroundColor: "#ffe9c7",
-    padding: 16,
-    marginTop: 12,
+    borderWidth: 1,
+    borderColor: LINE,
+    borderLeftWidth: 4,
+    borderLeftColor: ACCENT,
+    backgroundColor: "#fff",
+    padding: SPACE.md,
+    marginTop: SPACE.md,
   },
   alertLabel: {
+    fontSize: TYPE.caption,
     fontWeight: "700",
-    textTransform: "uppercase",
+    color: ACCENT,
+    marginBottom: SPACE.sm,
   },
   unseen: {
     fontWeight: "700",
   },
   helper: {
-    marginVertical: 8,
+    marginVertical: SPACE.sm,
+    fontSize: TYPE.caption,
     fontStyle: "italic",
+    color: INK,
   },
   nav: {
-    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    gap: SPACE.sm,
+    marginTop: SPACE.md,
+  },
+  navBtn: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: LINE,
+    backgroundColor: "#fff",
+    alignItems: "center",
+  },
+  navBtnOn: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  navBtnText: {
+    fontSize: TYPE.caption,
+    color: INK,
+    textAlign: "center",
+  },
+  navBtnTextOn: {
+    color: "#fff",
+    fontWeight: "700",
   },
   choice: {
-    fontSize: 18,
-    marginVertical: 8,
+    fontSize: TYPE.body,
+    marginVertical: SPACE.sm,
+    color: INK,
   },
   card: {
-    borderWidth: 2,
-    borderColor: "#111",
+    borderWidth: 1,
+    borderColor: LINE,
+    borderRadius: 8,
     backgroundColor: "#fff",
-    padding: 16,
-    marginTop: 12,
+    padding: SPACE.md,
+    marginTop: SPACE.md,
   },
   company: {
-    fontSize: 20,
+    fontSize: TYPE.title,
     fontWeight: "700",
+    color: INK,
   },
   why: {
-    borderWidth: 4,
-    borderColor: "#111",
-    backgroundColor: "#fff3a0",
-    padding: 12,
-    marginVertical: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: ACCENT,
+    backgroundColor: "rgba(11, 110, 86, 0.12)",
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: 12,
+    marginVertical: SPACE.sm,
   },
   whyLabel: {
+    fontSize: TYPE.caption,
     fontWeight: "700",
-    textTransform: "uppercase",
+    color: ACCENT,
     marginBottom: 4,
   },
   row: {
-    marginVertical: 8,
+    marginVertical: SPACE.sm,
+    fontSize: TYPE.body,
+    color: INK,
   },
   link: {
     textDecorationLine: "underline",
+    color: ACCENT,
   },
   bold: {
     fontWeight: "700",
@@ -804,11 +993,71 @@ const styles = StyleSheet.create({
   logo: {
     height: 48,
     width: 96,
-    marginBottom: 8,
+    marginBottom: SPACE.sm,
+  },
+  logoFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#e7e5e0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACE.sm,
+  },
+  logoLetter: {
+    fontSize: TYPE.body,
+    fontWeight: "700",
+    color: "#333",
+  },
+  banner: {
+    marginTop: SPACE.md,
+    fontSize: TYPE.body,
+    color: INK,
+  },
+  state: {
+    marginTop: SPACE.sm,
+  },
+  actions: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    gap: SPACE.sm,
+    marginTop: SPACE.sm,
+  },
+  actionBtn: {
+    minWidth: 0,
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    marginTop: SPACE.sm,
+  },
+  actionFill: {
+    flex: 1,
+  },
+  primaryBtn: {
+    backgroundColor: ACCENT,
+  },
+  secondaryBtn: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: LINE,
+  },
+  primaryBtnText: {
+    color: "#fff",
+    fontSize: TYPE.body,
+    fontWeight: "700",
+  },
+  secondaryBtnText: {
+    color: INK,
+    fontSize: TYPE.body,
+  },
+  disabled: {
+    opacity: 0.55,
   },
   error: {
-    color: "#8a1f1f",
+    color: ACCENT,
     fontWeight: "700",
-    marginVertical: 8,
+    fontSize: TYPE.body,
+    marginVertical: SPACE.sm,
   },
 });

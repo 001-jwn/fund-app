@@ -21,9 +21,38 @@ export const FILING_LINK_LABEL = "Read the filing";
 
 const KIND_LABELS = {
   price: "Price",
-  earnings: "Earnings",
+  earnings: "Results",
   news: "News",
 };
+
+function trimmed(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// One name for cards, Matches, Updates, digest rows, and filings.
+// A short name that is the ticker is shown once: "AMD", not "AMD (AMD)".
+export function companyLabel(row) {
+  if (!row || typeof row !== "object") return "";
+  const ticker = trimmed(row.ticker);
+  const shortName = trimmed(row.short_name);
+  const companyName = trimmed(row.company_name);
+  if (shortName && ticker && shortName.toLowerCase() === ticker.toLowerCase()) return shortName;
+  const name = shortName || companyName;
+  if (name && ticker) return `${name} (${ticker})`;
+  if (name) return name;
+  return ticker;
+}
+
+// A lone ticker is not a heading. A short name that matches the ticker still is.
+export function companyHeading(row) {
+  const label = companyLabel(row);
+  if (!label || !row || typeof row !== "object") return "";
+  const ticker = trimmed(row.ticker);
+  const shortName = trimmed(row.short_name);
+  const companyName = trimmed(row.company_name);
+  if (!shortName && !companyName && label.toLowerCase() === ticker.toLowerCase()) return "";
+  return label;
+}
 
 export function updatesFrom(data) {
   if (!data || !Array.isArray(data.updates)) return [];
@@ -88,12 +117,7 @@ export function filingsFrom(data) {
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     if (typeof item.line !== "string") continue;
-    let name = "";
-    if (typeof item.short_name === "string" && item.short_name.length > 0) {
-      name = item.short_name;
-    } else if (typeof item.ticker === "string") {
-      name = item.ticker;
-    }
+    const name = companyLabel(item);
     const url = filingLink(item.filing_url);
     rows.push({ name, line: item.line, url });
   }
