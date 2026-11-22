@@ -42,6 +42,9 @@ H3_CANDIDATE_ITEMS = frozenset({"1.01", "2.01", "2.02", "5.02", "7.01", "8.01"})
 KEPT_FORMS = frozenset({"8-K", "8-K/A"})
 
 ENV_USER_AGENT = "SEC_USER_AGENT"
+RULES_VERSION_KEY = "rules_version"
+# Bumped when confirmation rules change so candidate rows are read again once.
+RULES_VERSION = "m4-p0a"
 CIK_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 CIK_MAP_TTL = timedelta(days=30)
@@ -161,7 +164,51 @@ def refresh_liked_8k_filings() -> None:
             session.commit()
         finally:
             session.close()
+    _redecide_from_cache()
     _confirm_pending(user_agent)
+
+
+def _redecide_from_cache() -> None:
+    """Re-apply the rules once, reading only documents already on disk.
+
+    Cache expiry is ignored. This pass never requests a document from the SEC.
+    A row with no cached document, or a cache that cannot be decided, is left
+    exactly as it is, including its line.
+    """
+    session = dbmod.SessionLocal()
+    try:
+        state = session.get(SecFetchState, RULES_VERSION_KEY)
+        if state is not None and state.note == RULES_VERSION:
+            return
+        rows = (
+            session.query(SecFiling)
+            .filter(SecFiling.h3_candidate.is_(True), SecFiling.text_outcome.is_not(None))
+            .all()
+        )
+        for row in rows:
+            if row.ticker in SKIP_8K_TICKERS or row.form not in KEPT_FORMS:
+                continue
+            documents = _read_cached_documents(row.accession, ignore_expiry=True)
+            if not _documents_are_decidable(documents):
+                continue
+            company = session.get(Company, row.ticker)
+            if company is None:
+                continue
+            decision = decide_filing(
+                ticker=row.ticker,
+                form=row.form,
+                items=parse_items(row.items),
+                accession=row.accession,
+                documents=documents,
+            )
+            _apply_decision(row, decision, liked_display_name(company))
+        if state is None:
+            session.add(SecFetchState(state_key=RULES_VERSION_KEY, note=RULES_VERSION))
+        else:
+            state.note = RULES_VERSION
+        session.commit()
+    finally:
+        session.close()
 
 
 def filings_for_user(session, user_id: str) -> list[dict]:
@@ -308,7 +355,7 @@ def _mark_fetched(key: str) -> None:
         session.close()
 
 
-def _read_cache(path: Path, ttl: timedelta):
+def _read_cache(path: Path, ttl: timedelta, *, ignore_expiry: bool = False):
     if not path.is_file():
         return None
     try:
@@ -317,11 +364,32 @@ def _read_cache(path: Path, ttl: timedelta):
         if not isinstance(fetched, str):
             return None
         stamp = datetime.fromisoformat(fetched)
-        if utcnow() - stamp > ttl:
+        if not ignore_expiry and utcnow() - stamp > ttl:
             return None
         return wrapper.get("data")
     except (OSError, json.JSONDecodeError, ValueError):
         return None
+
+
+def _read_cached_documents(accession: str, *, ignore_expiry: bool = False):
+    cached = _read_cache(
+        CACHE_DIR / "documents" / f"{accession}.json",
+        DOCUMENT_TTL,
+        ignore_expiry=ignore_expiry,
+    )
+    return cached if isinstance(cached, list) else None
+
+
+def _documents_are_decidable(documents) -> bool:
+    """True when cached text is complete enough to decide without hiding a line by accident."""
+    if not isinstance(documents, list) or not documents:
+        return False
+    for doc in documents:
+        if not isinstance(doc, dict) or doc.get("too_long"):
+            continue
+        if not text_is_unreadable(doc.get("text") or ""):
+            return True
+    return False
 
 
 def _write_cache(path: Path, data) -> None:
@@ -470,7 +538,9 @@ def _apply_decision(row: SecFiling, decision: dict, name: str) -> None:
     if isinstance(leaders, list):
         fields["leaders_json"] = leaders
     line = None
-    if decision.get("text_outcome") == "confirmed" and category:
+    outcome = decision.get("text_outcome")
+    reason = decision.get("hide_reason")
+    if outcome == "confirmed" and category:
         line = build_summary(
             category=category,
             form=row.form,
@@ -480,9 +550,20 @@ def _apply_decision(row: SecFiling, decision: dict, name: str) -> None:
         )
         if line is None:
             category = None
-            decision = {**decision, "text_outcome": "unconfirmable", "verified": False, "h3_category": None}
-    row.text_outcome = decision.get("text_outcome")
-    row.verified = bool(decision.get("verified")) and bool(line)
+            outcome = "unconfirmable"
+            if decision.get("h3_category") == "leadership" and fields.get("text_outcome") == "unconfirmable":
+                reason = "leadership_rejected"
+            else:
+                reason = "no_line"
+        else:
+            reason = None
+    elif outcome == "unconfirmable":
+        reason = reason or "no_category"
+    else:
+        reason = None
+    row.text_outcome = outcome
+    row.hide_reason = reason if outcome == "unconfirmable" else None
+    row.verified = outcome == "confirmed" and bool(line)
     row.h3_category = category if line else None
     row.summary_plain = line
     if decision.get("amends_accession"):
@@ -819,6 +900,7 @@ def _mark_document_unreadable(accession: str) -> None:
         if row is None or row.text_outcome is not None:
             return
         row.text_outcome = "unconfirmable"
+        row.hide_reason = "no_text"
         row.verified = False
         row.h3_category = None
         row.summary_plain = None

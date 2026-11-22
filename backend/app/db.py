@@ -152,6 +152,7 @@ _MISSING_SEC_FILING_COLUMNS = (
     ("period_label", "TEXT"),
     ("leaders_json", "TEXT"),
     ("text_outcome", "VARCHAR(24)"),
+    ("hide_reason", "VARCHAR(32)"),
 )
 
 

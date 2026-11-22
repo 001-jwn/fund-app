@@ -951,7 +951,7 @@ def test_mixed_guidance_is_unclear():
     )
     assert decision["h3_category"] is None
     assert decision["verified"] is False
-    assert decision["hide_reason"] == "ambiguous"
+    assert decision["hide_reason"] == "unclear_direction"
     assert decision["text_outcome"] != "confirmed"
     assert _line(decision) is None
 

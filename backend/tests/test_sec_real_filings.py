@@ -386,7 +386,7 @@ def test_hidden_real_filings_stay_hidden():
         )
         assert decision["h3_category"] is None, name
         assert decision["verified"] is False
-        assert decision["hide_reason"] is None
+        assert decision["hide_reason"] == "no_category"
         assert _line(decision, name="NVIDIA", accepted_at="2026-11-01T16:00:00Z") is None
 
 
@@ -534,6 +534,79 @@ def test_candidate_cap_uses_the_shared_constants_and_logs_only_the_count(client,
     assert rows["0001045810-26-000007"] is False
 
 
+def test_confirm_of_something_else_still_shows_these_earnings_lines():
+    """A confirm that is not the outlook, in a sentence that mentions outlook or guidance,
+    is a restated outlook. These two filings stay shown with their current lines.
+    """
+    aapl_body_raw = _read("aapl-0000320193-26-000024-body.html")
+    aapl_exhibit_raw = _read("aapl-0000320193-26-000024-ex991.html")
+    aapl = decide_filing(
+        ticker="AAPL",
+        form="8-K",
+        items=["2.02", "9.01"],
+        accession="0000320193-26-000024",
+        documents=[
+            _doc(
+                plain_text(aapl_body_raw),
+                url="https://www.sec.gov/Archives/edgar/data/320193/000032019326000024/aapl-20261102.htm",
+                raw=aapl_body_raw,
+            ),
+            _doc(
+                plain_text(aapl_exhibit_raw),
+                url="https://www.sec.gov/Archives/edgar/data/320193/000032019326000024/a8-kex991q4202609262026.htm",
+                exhibit="99.1",
+                raw=aapl_exhibit_raw,
+            ),
+        ],
+    )
+    assert aapl["h3_category"] == "earnings"
+    assert _line(aapl, name="Apple", accepted_at="2026-11-02T21:30:23.000Z") == (
+        "Apple shared its quarterly results in an SEC filing on Nov 2. "
+        "The company reported diluted earnings per share of $2.10."
+    )
+
+    msft_body = plain_text(_read("msft-0001193125-26-436122-body.html"))
+    msft_exhibit = plain_text(_read("msft-0001193125-26-436122-ex991.txt"))
+    msft = decide_filing(
+        ticker="MSFT",
+        form="8-K",
+        items=["2.02", "9.01"],
+        accession="0001193125-26-436122",
+        documents=[
+            _doc(msft_body, url="https://www.sec.gov/Archives/edgar/data/789019/000119312526436122/msft-20261028.htm"),
+            _doc(msft_exhibit, url=MSFT_EXHIBIT, exhibit="99.1"),
+        ],
+    )
+    assert msft["h3_category"] == "earnings"
+    assert _line(msft, name="Microsoft", accepted_at="2026-10-28T20:30:00Z") == (
+        "Microsoft shared its quarterly results in an SEC filing on Oct 28."
+    )
+
+
+def test_ttwo_072175_reiterated_net_bookings_shows_earnings():
+    """The fixture is a verbatim excerpt of selected lines from the exhibit."""
+    text = plain_text(_read("ttwo-0001628280-26-072175-ex991.txt"))
+    assert "reiterates expectation for Net Bookings of $8.0 to $8.2 billion" in text
+    assert "reiterating our outlook for Fiscal 2027 Net Bookings" in text
+    decision = decide_filing(
+        ticker="TTWO",
+        form="8-K",
+        items=["2.02", "9.01"],
+        accession="0001628280-26-072175",
+        documents=[_doc(
+            text,
+            url="https://www.sec.gov/Archives/edgar/data/946581/000162828026072175/ttwo2q27earningsrelease.htm",
+            exhibit="99.1",
+        )],
+    )
+    assert decision["h3_category"] == "earnings"
+    assert decision["hide_reason"] is None
+    assert decision["verified"] is True
+    line = _line(decision, name="Take-Two", accepted_at="2026-11-09T21:10:58Z")
+    assert line.startswith("Take-Two shared its quarterly results in an SEC filing on Nov 9.")
+    assert "outlook" not in line.lower()
+
+
 def test_msft_380280_restated_outlook_stays_hidden():
     body = plain_text(_read("msft-0001193125-26-380280-body.txt"))
     exhibit = plain_text(_read("msft-0001193125-26-380280-ex991.txt"))
@@ -556,7 +629,7 @@ def test_msft_380280_restated_outlook_stays_hidden():
     )
     assert decision["h3_category"] is None
     assert decision["verified"] is False
-    assert decision["hide_reason"] == "ambiguous"
+    assert decision["hide_reason"] == "restated_outlook"
     assert decision["figure"] is None
     line = _line(decision, name="Microsoft", accepted_at="2026-09-02T20:30:24Z")
     assert line is None
@@ -575,7 +648,7 @@ def test_msft_380280_restated_outlook_stays_hidden():
         documents=[_doc(restated, url="https://www.sec.gov/Archives/edgar/data/789019/000119312526380280/ex.htm", exhibit="99.1")],
     )
     assert again["h3_category"] is None
-    assert again["hide_reason"] == "ambiguous"
+    assert again["hide_reason"] == "restated_outlook"
     assert _line(again, name="Microsoft", accepted_at="2026-09-02T20:30:24Z") is None
 
 
@@ -622,7 +695,9 @@ def test_fresh_outlook_range_is_copied_verbatim():
 
 
 def test_guidance_probe_clear_direction_shows_and_unclear_hides():
-    """QA probe: clear raise/reaffirm may show. Mixed or missing direction stays hidden."""
+    """A clear raise may show. Reaffirming an outlook now hides; that change is intentional.
+    Mixed or missing direction stays hidden.
+    """
     pad = " The filing was furnished to the regulator on the date shown." * 4
     main = "Item 7.01 Regulation FD Disclosure. The company furnished an exhibit." + pad
     exhibit_url = "https://www.sec.gov/Archives/edgar/data/1/ex99.htm"
@@ -657,12 +732,12 @@ def test_guidance_probe_clear_direction_shows_and_unclear_hides():
         "Testco reaffirmed its outlook for fiscal 2027. "
         "Revenue is expected to be $89.85 to $90.95 billion."
     )
-    assert reaffirmed["h3_category"] == "guidance"
-    assert reaffirmed["guide_direction"] == "confirmed"
-    assert line == (
-        "Testco confirmed its earlier outlook for fiscal 2027, according to an SEC filing on Sep 2. "
-        "The company now expects revenue of $89.85 to $90.95 billion."
-    )
+    assert reaffirmed["h3_category"] is None
+    assert reaffirmed["verified"] is False
+    assert reaffirmed["hide_reason"] == "restated_outlook"
+    assert reaffirmed["text_outcome"] != "confirmed"
+    assert line is None
+    assert "confirmed its earlier outlook" not in (line or "")
 
     billion_each, line = run(
         "Testco raised its outlook for fiscal 2027. "
@@ -690,7 +765,7 @@ def test_guidance_probe_clear_direction_shows_and_unclear_hides():
         hidden, line = run(text)
         assert hidden["h3_category"] is None
         assert hidden["verified"] is False
-        assert hidden["hide_reason"] == "ambiguous"
+        assert hidden["hide_reason"] == "unclear_direction"
         assert hidden["text_outcome"] != "confirmed"
         assert line is None
 

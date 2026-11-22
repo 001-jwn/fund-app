@@ -150,6 +150,8 @@ class SecFiling(Base):
     period_label: Mapped[str | None] = mapped_column(Text, nullable=True)
     leaders_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     text_outcome: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    # Internal only. Never copied into an API response or a K3 line.
+    hide_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class SecFetchState(Base):
