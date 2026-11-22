@@ -72,3 +72,27 @@ def test_cors_honors_cors_origins_when_set(monkeypatch, tmp_path):
         blocked_preflight = _preflight(client, BLOCKED)
         assert blocked_preflight.status_code == 400
         assert blocked_preflight.headers.get("access-control-allow-origin") != BLOCKED
+
+
+def test_server_error_is_readable_for_an_allowed_origin(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path, ORIGIN) as client:
+
+        def explode(*_args, **_kwargs):
+            raise RuntimeError("Finnhub key sk-secret\nTraceback (most recent call last)")
+
+        monkeypatch.setattr("app.routers.cards.order_feed_cards", explode)
+        onboard = client.post("/onboarding", json={"interests": ["gaming"]})
+        assert onboard.status_code == 200
+        response = client.get(
+            "/cards",
+            params={"user_id": onboard.json()["user_id"]},
+            headers={"Origin": ORIGIN},
+        )
+    assert response.status_code == 500
+    assert response.headers["access-control-allow-origin"] == ORIGIN
+    assert response.content == (
+        b'{"detail":"Something went wrong. Try again.","code":"server_error"}'
+    )
+    assert b"Finnhub" not in response.content
+    assert b"Traceback" not in response.content
+    assert b"sk-secret" not in response.content
