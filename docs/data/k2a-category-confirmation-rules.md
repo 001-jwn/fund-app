@@ -156,7 +156,6 @@ Rules: hide_reason is internal only. Never show it to users or put it in a K3 li
 **Rule (DS recommendation, consistent with §8.2 and the PL M3 override that a repeated outlook is not a new event):** treat confirm / affirm / reaffirm the same as reiterate. The existing "reiterate(s/d/ing)", "as provided on" and "no change to outlook" keep matching exactly as on main (anywhere in the text, no outlook word needed). Only the newly added confirm / affirm / reaffirm need outlook or guidance in the same sentence. Either marks a restated outlook:
 
 *Clarified 2026-11-21 after QA's PR #36 review: the earlier wording here could be read as narrowing the three existing phrases to outlook sentences. That was not intended; it would break the keep-as-before rule (TTWO `0001628280-26-072175`).*
-
 1. A restated outlook never confirms `guidance`. With nothing else confirmed, hide with `restated_outlook`.
 2. In a 2.02 release, a restated outlook is not a second category, so the earnings line can show alone (same as TTWO today). That line only says the company shared its quarterly results, so it stays true.
 3. If any sentence in the filing restates the outlook, guidance is not confirmed from that filing even if another sentence raises or lowers (today's whole-filing check, unchanged). Hiding a real raise is acceptable; a wrong line is not.

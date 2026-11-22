@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import re
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.errors import USER_NOT_FOUND
+from app.errors import BAD_REQUEST, USER_NOT_FOUND
 from app.models import Company, CompanyInterest, Dislike, Like, User, UserInterest
-from app.schemas import CardOut, CardsOut
+from app.schemas import API_ERROR_RESPONSES, CardOut, CardsOut
 from app.services.cards import (
     LikedCompany,
     index_company_interests,
     liked_display_name,
     order_feed_cards,
 )
+
+# Digits only, with an optional leading minus. "10.0", " 10", and "+10" are not this.
+_CANONICAL_LIMIT = re.compile(r"-?\d+")
 
 router = APIRouter()
 
@@ -23,12 +28,29 @@ DEFAULT_CARD_LIMIT = 10
 MAX_CARD_LIMIT = 50
 
 
-@router.get("/cards", response_model=CardsOut)
+def _canonical_limit(request: Request) -> int:
+    """One integer query value, or the default of 10 when limit is omitted."""
+    values = request.query_params.getlist("limit")
+    if not values:
+        return DEFAULT_CARD_LIMIT
+    if len(values) != 1 or _CANONICAL_LIMIT.fullmatch(values[0]) is None:
+        raise HTTPException(status_code=422, detail=BAD_REQUEST)
+    number = int(values[0])
+    if number < 1 or number > MAX_CARD_LIMIT:
+        raise HTTPException(status_code=422, detail=BAD_REQUEST)
+    return number
+
+
+@router.get("/cards", response_model=CardsOut, responses=API_ERROR_RESPONSES)
 def get_cards(
+    request: Request,
     user_id: str = Query(...),
     limit: int = Query(DEFAULT_CARD_LIMIT, ge=1, le=MAX_CARD_LIMIT),
     db: Session = Depends(get_db),
 ) -> CardsOut:
+    # The Query int still rejects non-integers. This also rejects forms that
+    # int() would accept, such as "10.0", " 10", or a repeated limit.
+    limit = _canonical_limit(request)
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail=USER_NOT_FOUND)

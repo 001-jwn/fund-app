@@ -128,6 +128,53 @@ def test_invalid_limit_is_422_bad_request(client):
         assert bad_limit not in response.text
 
 
+def test_noncanonical_limit_is_422_and_valid_limits_match_main(client):
+    import json
+
+    user_id = _onboard(client, ["gaming"])
+    omitted = client.get("/cards", params={"user_id": user_id})
+    assert omitted.status_code == 200
+    assert omitted.content == FIXTURE.read_bytes()
+    main_cards = json.loads(FIXTURE.read_text(encoding="utf-8"))["cards"]
+
+    for number in (1, 10, 50):
+        response = client.get("/cards", params={"user_id": user_id, "limit": str(number)})
+        assert response.status_code == 200
+        if number >= len(main_cards):
+            assert response.content == omitted.content
+        else:
+            assert response.json()["cards"] == main_cards[:number]
+
+    for url in (
+        f"/cards?user_id={user_id}&limit=10.0",
+        f"/cards?user_id={user_id}&limit=%2010",
+        f"/cards?user_id={user_id}&limit=5&limit=10",
+    ):
+        response = client.get(url)
+        assert_api_error(response, 422, "bad_request", BAD_REQUEST)
+        assert "10.0" not in response.text
+        assert "loc" not in response.text
+
+
+def test_openapi_422_uses_the_api_error_model(client):
+    schema = client.get("/openapi.json").json()
+    operation = schema["paths"]["/cards"]["get"]
+    for status in ("404", "422", "500"):
+        ref = operation["responses"][status]["content"]["application/json"]["schema"]["$ref"]
+        assert ref == "#/components/schemas/ApiErrorOut"
+        assert "HTTPValidationError" not in str(operation["responses"][status])
+    assert "HTTPValidationError" not in schema["components"]["schemas"]
+    error = schema["components"]["schemas"]["ApiErrorOut"]
+    assert error["properties"]["detail"]["type"] == "string"
+    assert error["properties"]["code"]["enum"] == [
+        "not_found",
+        "bad_request",
+        "rate_limited",
+        "data_unavailable",
+        "server_error",
+    ]
+
+
 def test_body_validation_is_422_bad_request(client):
     response = client.post("/onboarding", json={"interests": "Finnhub"})
     assert_api_error(response, 422, "bad_request", BAD_REQUEST)

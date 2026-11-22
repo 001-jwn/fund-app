@@ -8,13 +8,13 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.errors import USER_NOT_FOUND
 from app.models import Company, CompanyInterest, Match, User, UserInterest
-from app.schemas import MatchOut, MatchesOut
+from app.schemas import API_ERROR_RESPONSES, MatchOut, MatchesOut
 from app.services.cards import choose_interest_link, public_card
 
 router = APIRouter()
 
 
-@router.get("/matches", response_model=MatchesOut)
+@router.get("/matches", response_model=MatchesOut, responses=API_ERROR_RESPONSES)
 def get_matches(user_id: str = Query(...), db: Session = Depends(get_db)) -> MatchesOut:
     user = db.get(User, user_id)
     if user is None:

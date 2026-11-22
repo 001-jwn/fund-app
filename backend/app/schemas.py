@@ -2,7 +2,37 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+class ApiErrorOut(BaseModel):
+    """The JSON body every error response actually returns."""
+
+    detail: str
+    code: Literal[
+        "not_found",
+        "bad_request",
+        "rate_limited",
+        "data_unavailable",
+        "server_error",
+    ]
+
+
+# OpenAPI only. These do not change the responses the handlers send.
+API_ERROR_RESPONSES = {
+    404: {"model": ApiErrorOut},
+    422: {"model": ApiErrorOut},
+    500: {"model": ApiErrorOut},
+}
+API_VALIDATION_RESPONSES = {
+    422: {"model": ApiErrorOut},
+    500: {"model": ApiErrorOut},
+}
+API_SERVER_RESPONSES = {
+    500: {"model": ApiErrorOut},
+}
 
 
 class OnboardingIn(BaseModel):
